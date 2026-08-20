@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <title>手机输入同步</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: #f3f4f6;
+      color: #111827;
+      min-height: 100dvh;
+      padding: 16px;
+    }
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.08);
+      max-width: 480px;
+      margin: 0 auto;
+    }
+    h1 {
+      font-size: 20px;
+      margin-bottom: 8px;
+    }
+    .hint {
+      font-size: 13px;
+      color: #6b7280;
+      line-height: 1.5;
+      margin-bottom: 16px;
+    }
+    .row {
+      display: flex;
+      gap: 10px;
+      align-items: stretch;
+    }
+    input[type="text"] {
+      flex: 1;
+      min-width: 0;
+      font-size: 16px;
+      padding: 14px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 12px;
+      outline: none;
+      background: #fff;
+    }
+    input[type="text"]:focus {
+      border-color: #2563eb;
+      box-shadow: 0 0 0 3px rgba(37,99,235,.15);
+    }
+    button {
+      flex-shrink: 0;
+      border: none;
+      border-radius: 12px;
+      background: #2563eb;
+      color: #fff;
+      font-size: 16px;
+      font-weight: 600;
+      padding: 0 18px;
+      cursor: pointer;
+    }
+    button:active { transform: scale(.98); }
+    button:disabled {
+      opacity: .6;
+      cursor: not-allowed;
+    }
+    .status {
+      margin-top: 14px;
+      font-size: 14px;
+      min-height: 20px;
+    }
+    .status.ok { color: #059669; }
+    .status.err { color: #dc2626; }
+    .server {
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid #e5e7eb;
+      font-size: 12px;
+      color: #9ca3af;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>手机输入同步</h1>
+    <p class="hint">先在电脑上点击要输入的文本框，再在这里输入文字并点「发送」，内容会粘贴到电脑当前焦点。</p>
+
+    <div class="row">
+      <input
+        id="textInput"
+        type="text"
+        placeholder="点这里输入文字…"
+        autocomplete="off"
+        enterkeyhint="send"
+      >
+      <button id="sendBtn" type="button">发送</button>
+    </div>
+
+    <div id="status" class="status"></div>
+    <div id="serverInfo" class="server"></div>
+  </div>
+
+  <script>
+    const input = document.getElementById('textInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const statusEl = document.getElementById('status');
+    const serverInfo = document.getElementById('serverInfo');
+
+    serverInfo.textContent = '服务器: ' + location.origin;
+
+    function setStatus(text, ok) {
+      statusEl.textContent = text;
+      statusEl.className = 'status ' + (ok ? 'ok' : 'err');
+    }
+
+    async function sendText() {
+      const text = input.value;
+      if (!text.trim()) {
+        setStatus('请先输入一些文字', false);
+        input.focus();
+        return;
+      }
+
+      sendBtn.disabled = true;
+      setStatus('发送中…', true);
+
+      try {
+        const res = await fetch('/api/sync', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+        });
+        const data = await res.json();
+        if (res.ok && data.ok) {
+          setStatus(data.message || '已发送', true);
+        } else {
+          setStatus(data.message || '发送失败', false);
+        }
+      } catch (err) {
+        setStatus('网络错误，请确认手机和电脑在同一 WiFi', false);
+      } finally {
+        sendBtn.disabled = false;
+      }
+    }
+
+    sendBtn.addEventListener('click', sendText);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        sendText();
+      }
+    });
+  </script>
+</body>
+</html>
