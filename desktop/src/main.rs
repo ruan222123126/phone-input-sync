@@ -1047,6 +1047,8 @@ fn transcribe_wav_with_whisper(wav_bytes: &[u8]) -> Result<String, String> {
     let model_arg = model_path.to_string_lossy().into_owned();
     let wav_arg = wav_path.to_string_lossy().into_owned();
     let out_arg = out_base.to_string_lossy().into_owned();
+    // Whisper 默认中文常出繁体；用简体 prompt 引导输出简体
+    let prompt_arg = "以下是普通话的句子。";
 
     let output = Command::new(&exe)
         .current_dir(whisper_dir())
@@ -1057,6 +1059,8 @@ fn transcribe_wav_with_whisper(wav_bytes: &[u8]) -> Result<String, String> {
             &wav_arg,
             "-l",
             "zh",
+            "--prompt",
+            prompt_arg,
             "-nt",
             "-np",
             "-otxt",

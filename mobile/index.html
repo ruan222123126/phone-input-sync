@@ -243,6 +243,11 @@
       font-size: 0.94rem;
     }
 
+    .settings-nav + .settings-nav {
+      margin-top: 0;
+      border-top: 1px solid #f3f4f6;
+    }
+
     .settings-nav svg {
       width: 18px;
       height: 18px;
@@ -812,6 +817,10 @@
         color: #e8eaed;
       }
 
+      .settings-nav + .settings-nav {
+        border-top-color: #303236;
+      }
+
       .settings-nav svg {
         color: #9ca3af;
       }
@@ -969,6 +978,36 @@
     <div class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
       <h2 id="settingsTitle">设置</h2>
 
+      <button id="openGeneralBtn" class="settings-nav" type="button">
+        <span>通用设置</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="m9 18 6-6-6-6"></path>
+        </svg>
+      </button>
+
+      <button id="openShortcutsBtn" class="settings-nav" type="button">
+        <span>快捷键设置</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="m9 18 6-6-6-6"></path>
+        </svg>
+      </button>
+
+      <button id="settingsDone" class="settings-done" type="button">完成</button>
+    </div>
+  </div>
+
+  <div id="generalModal" class="settings-modal" aria-hidden="true">
+    <div id="generalBackdrop" class="settings-backdrop"></div>
+    <div class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="generalTitle">
+      <div class="shortcuts-panel-head">
+        <button id="generalBack" class="shortcuts-back" type="button" aria-label="返回">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m15 18-6-6 6-6"></path>
+          </svg>
+        </button>
+        <h2 id="generalTitle">通用设置</h2>
+      </div>
+
       <div class="settings-option">
         <span class="settings-option-label">显示标题与说明</span>
         <button
@@ -1028,15 +1067,6 @@
           aria-label="语音输入"
         ></button>
       </div>
-
-      <button id="openShortcutsBtn" class="settings-nav" type="button">
-        <span>快捷键设置</span>
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="m9 18 6-6-6-6"></path>
-        </svg>
-      </button>
-
-      <button id="settingsDone" class="settings-done" type="button">完成</button>
     </div>
   </div>
 
@@ -1085,6 +1115,10 @@
     const toggleStream = document.getElementById('toggleStream');
     const toggleVoice = document.getElementById('toggleVoice');
     const sendIcon = document.getElementById('sendIcon');
+    const openGeneralBtn = document.getElementById('openGeneralBtn');
+    const generalModal = document.getElementById('generalModal');
+    const generalBackdrop = document.getElementById('generalBackdrop');
+    const generalBack = document.getElementById('generalBack');
     const openShortcutsBtn = document.getElementById('openShortcutsBtn');
     const shortcutsModal = document.getElementById('shortcutsModal');
     const shortcutsBackdrop = document.getElementById('shortcutsBackdrop');
@@ -1202,6 +1236,20 @@
       settingsModal.setAttribute('aria-hidden', 'true');
     }
 
+    function openGeneralPanel() {
+      closeSettings();
+      generalModal.classList.add('is-open');
+      generalModal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeGeneralPanel(returnToSettings) {
+      generalModal.classList.remove('is-open');
+      generalModal.setAttribute('aria-hidden', 'true');
+      if (returnToSettings) {
+        openSettings();
+      }
+    }
+
     function openShortcutsPanel() {
       closeSettings();
       shortcutsModal.classList.add('is-open');
@@ -1210,9 +1258,12 @@
       renderShortcutList();
     }
 
-    function closeShortcutsPanel() {
+    function closeShortcutsPanel(returnToSettings) {
       shortcutsModal.classList.remove('is-open');
       shortcutsModal.setAttribute('aria-hidden', 'true');
+      if (returnToSettings) {
+        openSettings();
+      }
     }
 
     function loadShortcuts() {
@@ -1364,9 +1415,12 @@
     settingsBtn.addEventListener('click', openSettings);
     settingsBackdrop.addEventListener('click', closeSettings);
     settingsDone.addEventListener('click', closeSettings);
+    openGeneralBtn.addEventListener('click', openGeneralPanel);
+    generalBackdrop.addEventListener('click', () => closeGeneralPanel(false));
+    generalBack.addEventListener('click', () => closeGeneralPanel(true));
     openShortcutsBtn.addEventListener('click', openShortcutsPanel);
-    shortcutsBackdrop.addEventListener('click', closeShortcutsPanel);
-    shortcutsBack.addEventListener('click', closeShortcutsPanel);
+    shortcutsBackdrop.addEventListener('click', () => closeShortcutsPanel(false));
+    shortcutsBack.addEventListener('click', () => closeShortcutsPanel(true));
     shortcutAddBtn.addEventListener('click', addShortcut);
     shortcutNameInput.addEventListener('keydown', (e) => {
       if (e.key === 'Enter') {
@@ -1408,6 +1462,7 @@
       lastStreamedText = '';
       saveSettings(uiSettings);
       applyUiSettings();
+      closeGeneralPanel(false);
       closeSettings();
       setStatus('流式传递已开启，输入会实时同步', true);
       if (input.value) {
