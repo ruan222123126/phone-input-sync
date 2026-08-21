@@ -6,3 +6,4 @@ Cargo.lock
 Thumbs.db
 *.exe
 *.pdb
+desktop/certs/

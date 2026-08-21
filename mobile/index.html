@@ -2,123 +2,1606 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=overlays-content">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
   <title>手机输入同步</title>
   <style>
+    :root {
+      --mobile-home-content-width: 672px;
+    }
+
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
-      background: #f3f4f6;
-      color: #111827;
-      min-height: 100dvh;
-      padding: 16px;
-    }
-    .card {
-      background: #fff;
-      border-radius: 16px;
-      padding: 20px;
-      box-shadow: 0 8px 24px rgba(0,0,0,.08);
-      max-width: 480px;
-      margin: 0 auto;
-    }
-    h1 {
-      font-size: 20px;
-      margin-bottom: 8px;
-    }
-    .hint {
-      font-size: 13px;
-      color: #6b7280;
+
+    html, body {
+      width: 100%;
+      min-height: 100svh;
+      color: #202124;
+      background: #ffffff;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      font-synthesis: none;
       line-height: 1.5;
-      margin-bottom: 16px;
+      -webkit-font-smoothing: antialiased;
+      -webkit-text-size-adjust: 100%;
     }
-    .row {
-      display: flex;
-      gap: 10px;
-      align-items: stretch;
+
+    button, input, textarea {
+      font: inherit;
+      border: 0;
     }
-    input[type="text"] {
-      flex: 1;
-      min-width: 0;
-      font-size: 16px;
-      padding: 14px 12px;
-      border: 1px solid #d1d5db;
-      border-radius: 12px;
-      outline: none;
-      background: #fff;
-    }
-    input[type="text"]:focus {
-      border-color: #2563eb;
-      box-shadow: 0 0 0 3px rgba(37,99,235,.15);
-    }
+
     button {
-      flex-shrink: 0;
-      border: none;
-      border-radius: 12px;
-      background: #2563eb;
-      color: #fff;
-      font-size: 16px;
-      font-weight: 600;
-      padding: 0 18px;
+      padding: 0;
       cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
     }
-    button:active { transform: scale(.98); }
+
     button:disabled {
-      opacity: .6;
       cursor: not-allowed;
     }
-    .status {
-      margin-top: 14px;
-      font-size: 14px;
-      min-height: 20px;
+
+    .page {
+      min-height: 100svh;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      padding:
+        max(5svh, 24px)
+        0
+        max(16px, env(safe-area-inset-bottom));
     }
+
+    .page-inner {
+      width: min(calc(100% - 32px), var(--mobile-home-content-width));
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 14px;
+      flex-shrink: 0;
+    }
+
+    .page-copy {
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 1.35rem;
+      font-weight: 650;
+      letter-spacing: -0.01em;
+      margin-bottom: 8px;
+    }
+
+    .hint {
+      font-size: 0.94rem;
+      color: #6b7280;
+      line-height: 1.6;
+    }
+
+    .status {
+      font-size: 0.9rem;
+      min-height: 0;
+      line-height: 1.5;
+      text-align: center;
+    }
+
+    .status:not(:empty) {
+      min-height: 22px;
+      margin-top: 10px;
+    }
+
     .status.ok { color: #059669; }
     .status.err { color: #dc2626; }
+
     .server {
-      margin-top: 18px;
-      padding-top: 14px;
-      border-top: 1px solid #e5e7eb;
-      font-size: 12px;
+      font-size: 0.78rem;
       color: #9ca3af;
       word-break: break-all;
+      text-align: center;
+    }
+
+    .page-copy.is-hidden,
+    .server.is-hidden {
+      display: none;
+    }
+
+    .settings-fab {
+      position: fixed;
+      left: max(16px, env(safe-area-inset-left));
+      bottom: max(16px, env(safe-area-inset-bottom));
+      z-index: 20;
+      width: 44px;
+      height: 44px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #374151;
+      background: #f4f4f4;
+      border: 1px solid #e5e7eb;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+    }
+
+    .settings-fab svg {
+      width: 22px;
+      height: 22px;
+      display: block;
+    }
+
+    .settings-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 30;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+
+    .settings-modal.is-open {
+      display: flex;
+    }
+
+    .settings-backdrop {
+      position: absolute;
+      inset: 0;
+      background: rgba(17, 24, 39, 0.45);
+    }
+
+    .settings-panel {
+      position: relative;
+      z-index: 1;
+      width: min(100%, 360px);
+      padding: 20px;
+      border-radius: 16px;
+      background: #ffffff;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.18);
+    }
+
+    .settings-panel h2 {
+      font-size: 1.1rem;
+      font-weight: 650;
+      margin-bottom: 16px;
+    }
+
+    .settings-option {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid #f3f4f6;
+    }
+
+    .settings-option:last-of-type {
+      border-bottom: 0;
+    }
+
+    .settings-option-label {
+      font-size: 0.94rem;
+      color: #374151;
+      line-height: 1.4;
+    }
+
+    .settings-switch {
+      position: relative;
+      width: 48px;
+      height: 28px;
+      flex: 0 0 auto;
+      border-radius: 999px;
+      background: #d1d5db;
+    }
+
+    .settings-switch::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      background: #ffffff;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.15);
+    }
+
+    .settings-switch.is-on {
+      background: #111827;
+    }
+
+    .settings-switch.is-on::after {
+      left: 23px;
+    }
+
+    .settings-switch:disabled,
+    .settings-switch.is-locked {
+      opacity: 0.45;
+      cursor: not-allowed;
+      pointer-events: none;
+    }
+
+    .settings-done {
+      margin-top: 16px;
+      width: 100%;
+      min-height: 44px;
+      border-radius: 10px;
+      color: #ffffff;
+      background: #111827;
+      font-size: 0.94rem;
+      font-weight: 600;
+    }
+
+    .settings-nav {
+      width: 100%;
+      min-height: 44px;
+      margin-top: 4px;
+      padding: 0 4px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      color: #374151;
+      background: transparent;
+      font-size: 0.94rem;
+    }
+
+    .settings-nav svg {
+      width: 18px;
+      height: 18px;
+      flex: 0 0 auto;
+      color: #9ca3af;
+    }
+
+    .shortcuts-panel {
+      max-height: min(80svh, 560px);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .shortcuts-panel-head {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .shortcuts-back {
+      width: 36px;
+      height: 36px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      color: #374151;
+      background: #f3f4f6;
+    }
+
+    .shortcuts-back svg {
+      width: 20px;
+      height: 20px;
+    }
+
+    .shortcuts-panel-head h2 {
+      margin-bottom: 0;
+      flex: 1;
+    }
+
+    .shortcut-list {
+      flex: 1;
+      min-height: 0;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .shortcut-empty {
+      padding: 16px 0;
+      color: #9ca3af;
+      font-size: 0.88rem;
+      text-align: center;
+    }
+
+    .shortcut-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      background: #f9fafb;
+    }
+
+    .shortcut-item-main {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .shortcut-item-name {
+      font-size: 0.94rem;
+      color: #111827;
+      font-weight: 600;
+    }
+
+    .shortcut-item-key {
+      margin-top: 2px;
+      font-size: 0.78rem;
+      color: #6b7280;
+    }
+
+    .shortcut-delete {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      color: #dc2626;
+      background: #fef2f2;
+      font-size: 18px;
+      line-height: 1;
+    }
+
+    .shortcut-form {
+      display: grid;
+      gap: 8px;
+    }
+
+    .shortcut-form input {
+      min-height: 42px;
+      padding: 10px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
+      background: #ffffff;
+      color: #111827;
+      font-size: 16px;
+    }
+
+    .shortcut-form input:focus {
+      outline: none;
+      border-color: #111827;
+    }
+
+    .shortcut-form-hint {
+      font-size: 0.78rem;
+      line-height: 1.45;
+      color: #6b7280;
+    }
+
+    .shortcut-form-status {
+      font-size: 0.82rem;
+      line-height: 1.4;
+      min-height: 0;
+      color: #6b7280;
+    }
+
+    .shortcut-form-status:not(:empty) {
+      min-height: 18px;
+    }
+
+    .shortcut-form-status.ok {
+      color: #059669;
+    }
+
+    .shortcut-form-status.err {
+      color: #dc2626;
+    }
+
+    .shortcut-add {
+      min-height: 42px;
+      border-radius: 10px;
+      color: #ffffff;
+      background: #111827;
+      font-size: 0.94rem;
+      font-weight: 600;
+    }
+
+    .shortcut-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .shortcut-bar:empty {
+      display: none;
+    }
+
+    .shortcut-chip {
+      min-height: 36px;
+      padding: 0 14px;
+      border: 1px solid #e5e7eb;
+      border-radius: 999px;
+      color: #374151;
+      background: #ffffff;
+      font-size: 0.88rem;
+      font-weight: 500;
+    }
+
+    .shortcut-chip:active {
+      background: #f3f4f6;
+    }
+
+    .composer-stack {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: 6px;
+    }
+
+    .composer-dock {
+      width: 100%;
+    }
+
+    .composer-shell {
+      position: relative;
+      width: 100%;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      background: #f4f4f4;
+    }
+
+    .composer-shell.is-focused {
+      border-color: #e5e7eb;
+      background: #ffffff;
+      box-shadow: 0 2px 15px rgba(0, 0, 0, 0.08);
+    }
+
+    .composer-textarea-wrap {
+      position: relative;
+      min-width: 0;
+      width: 100%;
+      cursor: text;
+    }
+
+    .composer-input {
+      display: block;
+      min-width: 0;
+      width: 100%;
+      min-height: 52px;
+      max-height: 200px;
+      border: 0;
+      border-radius: 0;
+      padding: 14px 92px 14px 16px;
+      color: #202124;
+      background: transparent;
+      outline: none;
+      font-size: 16px;
+      line-height: 24px;
+      overflow-y: auto;
+      resize: none;
+      scrollbar-width: none;
+      touch-action: manipulation;
+      -webkit-user-select: text;
+      user-select: text;
+      cursor: text;
+    }
+
+    .composer-input::-webkit-scrollbar {
+      display: none;
+    }
+
+    .composer-input::placeholder {
+      color: #6b7280;
+    }
+
+    .composer-actions {
+      position: absolute;
+      right: 6px;
+      bottom: 6px;
+      z-index: 1;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 2px;
+      pointer-events: none;
+    }
+
+    .mic-button,
+    .send-button {
+      width: 32px;
+      height: 32px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 auto;
+      box-shadow: none;
+      pointer-events: auto;
+    }
+
+    .mic-button {
+      color: #374151;
+      background: transparent;
+    }
+
+    .mic-button.is-listening {
+      color: #ffffff;
+      background: #dc2626;
+      animation: mic-pulse 1.2s ease-in-out infinite;
+    }
+
+    .mic-button:disabled {
+      opacity: 0.38;
+      pointer-events: none;
+    }
+
+    .send-button {
+      color: #ffffff;
+      background: #111827;
+    }
+
+    .send-button:disabled {
+      opacity: 0.38;
+      box-shadow: none;
+      pointer-events: none;
+    }
+
+    .mic-button-slot,
+    .send-button-slot {
+      width: 40px;
+      height: 40px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      pointer-events: none;
+    }
+
+    .send-button-slot {
+      display: none;
+    }
+
+    .send-button-slot.is-visible {
+      display: inline-flex;
+      pointer-events: auto;
+    }
+
+    .mic-button-slot {
+      pointer-events: auto;
+    }
+
+    .mic-button .ui-icon,
+    .send-button .ui-icon {
+      width: 20px;
+      height: 20px;
+      display: block;
+      flex: 0 0 auto;
+      color: currentColor;
+    }
+
+    @keyframes mic-pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.06); opacity: 0.88; }
+    }
+
+    .gyro-section {
+      flex: 1;
+      min-height: 220px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 4px;
+      padding: 0 16px;
+    }
+
+    .gyro-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .gyro-title {
+      font-size: 0.94rem;
+      font-weight: 600;
+      color: #374151;
+    }
+
+    .gyro-status {
+      font-size: 0.78rem;
+      color: #9ca3af;
+      text-align: right;
+      line-height: 1.4;
+    }
+
+    .gyro-status.is-active {
+      color: #059669;
+    }
+
+    .gyro-status.is-error {
+      color: #dc2626;
+    }
+
+    .gyro-pad {
+      position: relative;
+      flex: 0 0 auto;
+      min-height: 200px;
+      max-height: 38svh;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+      overflow: hidden;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    .gyro-pad.is-active {
+      background: transparent;
+    }
+
+    .gyro-crosshair {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+    }
+
+    .gyro-crosshair::before,
+    .gyro-crosshair::after {
+      content: "";
+      position: absolute;
+      background: rgba(156, 163, 175, 0.45);
+    }
+
+    .gyro-crosshair::before {
+      top: 50%;
+      left: 12%;
+      right: 12%;
+      height: 1px;
+      transform: translateY(-50%);
+    }
+
+    .gyro-crosshair::after {
+      left: 50%;
+      top: 12%;
+      bottom: 12%;
+      width: 1px;
+      transform: translateX(-50%);
+    }
+
+    .gyro-dot {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 28px;
+      height: 28px;
+      margin: -14px 0 0 -14px;
+      border-radius: 999px;
+      background: #111827;
+      box-shadow: 0 4px 14px rgba(17, 24, 39, 0.28);
+      pointer-events: none;
+      transition: transform 0.15s ease-out;
+    }
+
+    .gyro-pad.is-dragging .gyro-dot {
+      transition: none;
+    }
+
+    .gyro-pad.is-active .gyro-dot {
+      background: #059669;
+    }
+
+    .gyro-hint {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 14px;
+      text-align: center;
+      font-size: 0.78rem;
+      color: #9ca3af;
+      pointer-events: none;
+      padding: 0 16px;
+    }
+
+    .gyro-controls {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: -4px;
+    }
+
+    .gyro-btn {
+      min-height: 40px;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      background: #ffffff;
+      color: #374151;
+      font-size: 0.84rem;
+      font-weight: 600;
+    }
+
+    .gyro-btn.is-on {
+      color: #ffffff;
+      background: #111827;
+      border-color: #111827;
+    }
+
+    .gyro-btn:active {
+      transform: scale(0.98);
+    }
+
+    @media (prefers-color-scheme: dark) {
+      html, body {
+        color: #e8eaed;
+        background: #131314;
+      }
+
+      .hint {
+        color: #a3a7ad;
+      }
+
+      .server {
+        color: #6b7280;
+      }
+
+      .composer-shell {
+        color: #f1f3f4;
+        background: #1f1f20;
+      }
+
+      .composer-shell.is-focused {
+        border-color: #303236;
+        background: #131314;
+        box-shadow: 0 0 16px rgba(0, 0, 0, 0.22);
+      }
+
+      .composer-input {
+        color: #e8eaed;
+      }
+
+      .composer-input::placeholder {
+        color: #a3a7ad;
+      }
+
+      .send-button {
+        color: #131314;
+        background: #e8eaed;
+      }
+
+      .mic-button {
+        color: #e8eaed;
+      }
+
+      .mic-button.is-listening {
+        color: #ffffff;
+        background: #dc2626;
+      }
+
+      .settings-fab {
+        color: #e8eaed;
+        background: #1f1f20;
+        border-color: #303236;
+      }
+
+      .settings-panel {
+        background: #1f1f20;
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
+      }
+
+      .settings-option {
+        border-bottom-color: #303236;
+      }
+
+      .settings-option-label {
+        color: #e8eaed;
+      }
+
+      .settings-switch {
+        background: #4b5563;
+      }
+
+      .settings-switch.is-on {
+        background: #e8eaed;
+      }
+
+      .settings-done {
+        color: #131314;
+        background: #e8eaed;
+      }
+
+      .settings-nav {
+        color: #e8eaed;
+      }
+
+      .settings-nav svg {
+        color: #9ca3af;
+      }
+
+      .shortcuts-back {
+        color: #e8eaed;
+        background: #2c2c2e;
+      }
+
+      .shortcut-item {
+        border-color: #303236;
+        background: #2c2c2e;
+      }
+
+      .shortcut-item-name {
+        color: #e8eaed;
+      }
+
+      .shortcut-item-key {
+        color: #a3a7ad;
+      }
+
+      .shortcut-delete {
+        color: #fca5a5;
+        background: #3f1d1d;
+      }
+
+      .shortcut-form input {
+        border-color: #3a3a3c;
+        background: #1c1c1e;
+        color: #e8eaed;
+      }
+
+      .shortcut-add {
+        color: #131314;
+        background: #e8eaed;
+      }
+
+      .shortcut-chip {
+        border-color: #3a3a3c;
+        color: #e8eaed;
+        background: #2c2c2e;
+      }
+
+      .shortcut-chip:active {
+        background: #3a3a3c;
+      }
+
+      .gyro-title {
+        color: #e8eaed;
+      }
+
+      .gyro-dot {
+        background: #e8eaed;
+      }
+
+      .gyro-pad.is-active .gyro-dot {
+        background: #34d399;
+      }
+
+      .gyro-btn {
+        border-color: #303236;
+        background: #2c2c2e;
+        color: #e8eaed;
+      }
+
+      .gyro-btn.is-on {
+        color: #131314;
+        background: #e8eaed;
+        border-color: #e8eaed;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="card">
-    <h1>手机输入同步</h1>
-    <p class="hint">先在电脑上点击要输入的文本框，再在这里输入文字并点「发送」，内容会粘贴到电脑当前焦点。</p>
+  <main class="page">
+    <div class="page-inner">
+      <div id="pageCopy" class="page-copy">
+        <h1>手机输入同步</h1>
+        <p class="hint">先在电脑上点击要输入的文本框，再在这里输入文字并发送。也可点麦克风录音，说完再点一次结束，电脑端会转成文字。</p>
+      </div>
 
-    <div class="row">
-      <input
-        id="textInput"
-        type="text"
-        placeholder="点这里输入文字…"
-        autocomplete="off"
-        enterkeyhint="send"
-      >
-      <button id="sendBtn" type="button">发送</button>
+      <div class="composer-stack">
+        <div id="composerForm" class="composer-dock">
+          <div id="composerShell" class="composer-shell">
+            <div id="composerWrap" class="composer-textarea-wrap">
+              <textarea
+                id="textInput"
+                class="composer-input"
+                rows="1"
+                placeholder="点这里输入文字…"
+                autocomplete="off"
+                enterkeyhint="send"
+                readonly
+              ></textarea>
+              <div class="composer-actions">
+                <span id="micSlot" class="mic-button-slot">
+                  <button id="micBtn" class="mic-button" type="button" aria-label="语音输入" aria-pressed="false">
+                    <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
+                      <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                      <line x1="12" x2="12" y1="19" y2="22"></line>
+                    </svg>
+                  </button>
+                </span>
+                <span id="sendSlot" class="send-button-slot" aria-hidden="true">
+                  <button id="sendBtn" class="send-button" type="button" aria-label="发送">
+                    <svg id="sendIcon" class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <path d="m5 12 7-7 7 7"></path>
+                      <path d="M12 19V5"></path>
+                    </svg>
+                  </button>
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="shortcutBar" class="shortcut-bar" aria-label="快捷键"></div>
+
+        <div id="serverInfo" class="server"></div>
+      </div>
+
+      <div id="status" class="status"></div>
     </div>
 
-    <div id="status" class="status"></div>
-    <div id="serverInfo" class="server"></div>
+    <section class="gyro-section" aria-label="触控鼠标">
+      <div class="gyro-head">
+        <div class="gyro-title">触控鼠标</div>
+        <div id="gyroStatus" class="gyro-status">点击「启用」开始控制</div>
+      </div>
+
+      <div id="gyroPad" class="gyro-pad" role="application" aria-label="触控板">
+        <div class="gyro-crosshair" aria-hidden="true"></div>
+        <div id="gyroDot" class="gyro-dot" aria-hidden="true"></div>
+        <div id="gyroHint" class="gyro-hint">拖动圆点移动光标，轻触圆点左键单击</div>
+      </div>
+
+      <div class="gyro-controls">
+        <button id="gyroToggleBtn" class="gyro-btn" type="button">启用</button>
+        <button id="gyroClickBtn" class="gyro-btn" type="button">右键点击</button>
+      </div>
+    </section>
+  </main>
+
+  <button id="settingsBtn" class="settings-fab" type="button" aria-label="设置">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="3"></circle>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+    </svg>
+  </button>
+
+  <div id="settingsModal" class="settings-modal" aria-hidden="true">
+    <div id="settingsBackdrop" class="settings-backdrop"></div>
+    <div class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+      <h2 id="settingsTitle">设置</h2>
+
+      <div class="settings-option">
+        <span class="settings-option-label">显示标题与说明</span>
+        <button
+          id="toggleHeader"
+          class="settings-switch is-on"
+          type="button"
+          role="switch"
+          aria-checked="true"
+          aria-label="显示标题与说明"
+        ></button>
+      </div>
+
+      <div class="settings-option">
+        <span class="settings-option-label">显示服务器地址</span>
+        <button
+          id="toggleServer"
+          class="settings-switch is-on"
+          type="button"
+          role="switch"
+          aria-checked="true"
+          aria-label="显示服务器地址"
+        ></button>
+      </div>
+
+      <div class="settings-option">
+        <span class="settings-option-label">发送后自动按 Enter</span>
+        <button
+          id="toggleSendEnter"
+          class="settings-switch"
+          type="button"
+          role="switch"
+          aria-checked="false"
+          aria-label="发送后自动按 Enter"
+        ></button>
+      </div>
+
+      <div class="settings-option">
+        <span class="settings-option-label">流式传递</span>
+        <button
+          id="toggleStream"
+          class="settings-switch"
+          type="button"
+          role="switch"
+          aria-checked="false"
+          aria-label="流式传递"
+        ></button>
+      </div>
+
+      <button id="openShortcutsBtn" class="settings-nav" type="button">
+        <span>快捷键设置</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="m9 18 6-6-6-6"></path>
+        </svg>
+      </button>
+
+      <button id="settingsDone" class="settings-done" type="button">完成</button>
+    </div>
+  </div>
+
+  <div id="shortcutsModal" class="settings-modal" aria-hidden="true">
+    <div id="shortcutsBackdrop" class="settings-backdrop"></div>
+    <div class="settings-panel shortcuts-panel" role="dialog" aria-modal="true" aria-labelledby="shortcutsTitle">
+      <div class="shortcuts-panel-head">
+        <button id="shortcutsBack" class="shortcuts-back" type="button" aria-label="返回">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m15 18-6-6 6-6"></path>
+          </svg>
+        </button>
+        <h2 id="shortcutsTitle">快捷键</h2>
+      </div>
+
+      <div id="shortcutList" class="shortcut-list"></div>
+
+      <div class="shortcut-form">
+        <input id="shortcutNameInput" type="text" placeholder="名称，例如：发送" autocomplete="off">
+        <input id="shortcutKeyInput" type="text" placeholder="例如：enter、继续,enter、ctrl+s" autocomplete="off">
+        <p class="shortcut-form-hint">多步用逗号分隔，纯数字表示等待秒数。中文会粘贴到电脑当前输入框。例如 继续,enter 先输入「继续」再按 Enter。</p>
+        <div id="shortcutFormStatus" class="shortcut-form-status" role="status"></div>
+        <button id="shortcutAddBtn" class="shortcut-add" type="button">添加快捷键</button>
+      </div>
+    </div>
   </div>
 
   <script>
     const input = document.getElementById('textInput');
     const sendBtn = document.getElementById('sendBtn');
+    const sendSlot = document.getElementById('sendSlot');
+    const micBtn = document.getElementById('micBtn');
+    const micSlot = document.getElementById('micSlot');
+    const composerShell = document.getElementById('composerShell');
+    const composerWrap = document.getElementById('composerWrap');
     const statusEl = document.getElementById('status');
     const serverInfo = document.getElementById('serverInfo');
+    const pageCopy = document.getElementById('pageCopy');
+    const settingsBtn = document.getElementById('settingsBtn');
+    const settingsModal = document.getElementById('settingsModal');
+    const settingsBackdrop = document.getElementById('settingsBackdrop');
+    const settingsDone = document.getElementById('settingsDone');
+    const toggleHeader = document.getElementById('toggleHeader');
+    const toggleServer = document.getElementById('toggleServer');
+    const toggleSendEnter = document.getElementById('toggleSendEnter');
+    const toggleStream = document.getElementById('toggleStream');
+    const sendIcon = document.getElementById('sendIcon');
+    const openShortcutsBtn = document.getElementById('openShortcutsBtn');
+    const shortcutsModal = document.getElementById('shortcutsModal');
+    const shortcutsBackdrop = document.getElementById('shortcutsBackdrop');
+    const shortcutsBack = document.getElementById('shortcutsBack');
+    const shortcutList = document.getElementById('shortcutList');
+    const shortcutBar = document.getElementById('shortcutBar');
+    const shortcutNameInput = document.getElementById('shortcutNameInput');
+    const shortcutKeyInput = document.getElementById('shortcutKeyInput');
+    const shortcutAddBtn = document.getElementById('shortcutAddBtn');
+    const shortcutFormStatus = document.getElementById('shortcutFormStatus');
+
+    const SETTINGS_KEY = 'phone-input-sync.ui';
+    const SHORTCUTS_KEY = 'phone-input-sync.shortcuts';
+    const defaultSettings = {
+      showHeader: true,
+      showServer: true,
+      sendEnterAfterSync: false,
+      streamMode: false,
+    };
+
+    const SEND_ICON_PATHS = '<path d="m5 12 7-7 7 7"></path><path d="M12 19V5"></path>';
+    const ENTER_ICON_PATHS = '<path d="M9 10 4 15l5 5"></path><path d="M20 4v7a4 4 0 0 1-4 4H4"></path>';
 
     serverInfo.textContent = '服务器: ' + location.origin;
+
+    function createId() {
+      if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+        return crypto.randomUUID();
+      }
+      return 's-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
+    }
 
     function setStatus(text, ok) {
       statusEl.textContent = text;
       statusEl.className = 'status ' + (ok ? 'ok' : 'err');
     }
 
+    function setShortcutFormStatus(text, ok) {
+      shortcutFormStatus.textContent = text;
+      shortcutFormStatus.className = 'shortcut-form-status' + (text ? (ok ? ' ok' : ' err') : '');
+    }
+
+    function loadSettings() {
+      try {
+        const raw = localStorage.getItem(SETTINGS_KEY);
+        if (!raw) {
+          return { ...defaultSettings };
+        }
+        const parsed = JSON.parse(raw);
+        return {
+          showHeader: parsed.showHeader !== false,
+          showServer: parsed.showServer !== false,
+          sendEnterAfterSync: parsed.sendEnterAfterSync === true,
+          // 流式是一次性会话，刷新后不自动恢复，避免与电脑端不同步
+          streamMode: false,
+        };
+      } catch {
+        return { ...defaultSettings };
+      }
+    }
+
+    function saveSettings(settings) {
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    }
+
+    let uiSettings = loadSettings();
+    let lastStreamedText = '';
+    let streamBusy = false;
+    let streamQueued = false;
+    let isComposing = false;
+    let streamTimer = 0;
+
+    function syncSwitch(button, enabled) {
+      button.classList.toggle('is-on', enabled);
+      button.setAttribute('aria-checked', enabled ? 'true' : 'false');
+    }
+
+    function updateSendButtonAppearance() {
+      if (uiSettings.streamMode) {
+        sendIcon.innerHTML = ENTER_ICON_PATHS;
+        sendBtn.setAttribute('aria-label', '回车');
+      } else {
+        sendIcon.innerHTML = SEND_ICON_PATHS;
+        sendBtn.setAttribute('aria-label', '发送');
+      }
+    }
+
+    function applyUiSettings() {
+      pageCopy.classList.toggle('is-hidden', !uiSettings.showHeader);
+      serverInfo.classList.toggle('is-hidden', !uiSettings.showServer);
+      syncSwitch(toggleHeader, uiSettings.showHeader);
+      syncSwitch(toggleServer, uiSettings.showServer);
+      syncSwitch(toggleSendEnter, uiSettings.sendEnterAfterSync);
+      syncSwitch(toggleStream, uiSettings.streamMode);
+      // 流式会话自带收尾 Enter，期间不允许改「发送后自动按 Enter」
+      toggleSendEnter.disabled = uiSettings.streamMode;
+      toggleSendEnter.classList.toggle('is-locked', uiSettings.streamMode);
+      updateSendButtonAppearance();
+      syncComposerState();
+    }
+
+    function openSettings() {
+      settingsModal.classList.add('is-open');
+      settingsModal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeSettings() {
+      settingsModal.classList.remove('is-open');
+      settingsModal.setAttribute('aria-hidden', 'true');
+    }
+
+    function openShortcutsPanel() {
+      closeSettings();
+      shortcutsModal.classList.add('is-open');
+      shortcutsModal.setAttribute('aria-hidden', 'false');
+      setShortcutFormStatus('', true);
+      renderShortcutList();
+    }
+
+    function closeShortcutsPanel() {
+      shortcutsModal.classList.remove('is-open');
+      shortcutsModal.setAttribute('aria-hidden', 'true');
+    }
+
+    function loadShortcuts() {
+      try {
+        const raw = localStorage.getItem(SHORTCUTS_KEY);
+        if (!raw) {
+          return [];
+        }
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) {
+          return [];
+        }
+        return parsed
+          .filter((item) => item && typeof item.name === 'string' && typeof item.key === 'string')
+          .map((item) => ({
+            id: String(item.id || createId()),
+            name: item.name.trim(),
+            key: item.key.trim(),
+          }))
+          .filter((item) => item.name && item.key);
+      } catch {
+        return [];
+      }
+    }
+
+    function saveShortcuts(shortcuts) {
+      localStorage.setItem(SHORTCUTS_KEY, JSON.stringify(shortcuts));
+    }
+
+    let shortcuts = loadShortcuts();
+
+    function renderShortcutBar() {
+      shortcutBar.innerHTML = '';
+      shortcuts.forEach((shortcut) => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'shortcut-chip';
+        btn.textContent = shortcut.name;
+        btn.title = shortcut.key;
+        btn.addEventListener('click', () => triggerShortcut(shortcut));
+        shortcutBar.appendChild(btn);
+      });
+    }
+
+    function renderShortcutList() {
+      shortcutList.innerHTML = '';
+      if (shortcuts.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'shortcut-empty';
+        empty.textContent = '还没有快捷键，在下方添加';
+        shortcutList.appendChild(empty);
+        return;
+      }
+
+      shortcuts.forEach((shortcut) => {
+        const item = document.createElement('div');
+        item.className = 'shortcut-item';
+
+        const main = document.createElement('div');
+        main.className = 'shortcut-item-main';
+
+        const name = document.createElement('div');
+        name.className = 'shortcut-item-name';
+        name.textContent = shortcut.name;
+
+        const key = document.createElement('div');
+        key.className = 'shortcut-item-key';
+        key.textContent = shortcut.key;
+
+        main.appendChild(name);
+        main.appendChild(key);
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.type = 'button';
+        deleteBtn.className = 'shortcut-delete';
+        deleteBtn.setAttribute('aria-label', '删除快捷键');
+        deleteBtn.textContent = '×';
+        deleteBtn.addEventListener('click', () => {
+          shortcuts = shortcuts.filter((entry) => entry.id !== shortcut.id);
+          saveShortcuts(shortcuts);
+          renderShortcutList();
+          renderShortcutBar();
+        });
+
+        item.appendChild(main);
+        item.appendChild(deleteBtn);
+        shortcutList.appendChild(item);
+      });
+    }
+
+    function addShortcut() {
+      const name = shortcutNameInput.value.trim();
+      const key = shortcutKeyInput.value.trim();
+      if (!name) {
+        setShortcutFormStatus('请填写快捷键名称', false);
+        shortcutNameInput.focus();
+        return;
+      }
+      if (!key) {
+        setShortcutFormStatus('请填写键名', false);
+        shortcutKeyInput.focus();
+        return;
+      }
+
+      try {
+        shortcuts.push({
+          id: createId(),
+          name,
+          key,
+        });
+        saveShortcuts(shortcuts);
+        shortcutNameInput.value = '';
+        shortcutKeyInput.value = '';
+        renderShortcutList();
+        renderShortcutBar();
+        setShortcutFormStatus('快捷键已添加', true);
+        setStatus('快捷键已添加', true);
+      } catch (err) {
+        setShortcutFormStatus('保存失败，请重试', false);
+      }
+    }
+
+    async function sendKey(key, successMessage) {
+      const res = await fetch('/api/key', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key }),
+      });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        if (successMessage !== false) {
+          setStatus(successMessage || data.message || '按键已发送', true);
+        }
+        return true;
+      }
+      setStatus(data.message || '按键发送失败', false);
+      return false;
+    }
+
+    async function triggerShortcut(shortcut) {
+      setStatus('发送中…', true);
+      try {
+        await sendKey(shortcut.key, `已执行：${shortcut.name}`);
+      } catch (err) {
+        setStatus('网络错误，请确认手机和电脑在同一 WiFi', false);
+      }
+    }
+
+    settingsBtn.addEventListener('click', openSettings);
+    settingsBackdrop.addEventListener('click', closeSettings);
+    settingsDone.addEventListener('click', closeSettings);
+    openShortcutsBtn.addEventListener('click', openShortcutsPanel);
+    shortcutsBackdrop.addEventListener('click', closeShortcutsPanel);
+    shortcutsBack.addEventListener('click', closeShortcutsPanel);
+    shortcutAddBtn.addEventListener('click', addShortcut);
+    shortcutNameInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        shortcutKeyInput.focus();
+      }
+    });
+    shortcutKeyInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        addShortcut();
+      }
+    });
+
+    toggleHeader.addEventListener('click', () => {
+      uiSettings.showHeader = !uiSettings.showHeader;
+      saveSettings(uiSettings);
+      applyUiSettings();
+    });
+
+    toggleServer.addEventListener('click', () => {
+      uiSettings.showServer = !uiSettings.showServer;
+      saveSettings(uiSettings);
+      applyUiSettings();
+    });
+
+    toggleSendEnter.addEventListener('click', () => {
+      if (uiSettings.streamMode) {
+        return;
+      }
+      uiSettings.sendEnterAfterSync = !uiSettings.sendEnterAfterSync;
+      saveSettings(uiSettings);
+      applyUiSettings();
+    });
+
+    toggleStream.addEventListener('click', () => {
+      uiSettings.streamMode = true;
+      uiSettings.sendEnterAfterSync = false;
+      lastStreamedText = '';
+      saveSettings(uiSettings);
+      applyUiSettings();
+      closeSettings();
+      setStatus('流式传递已开启，输入会实时同步', true);
+      if (input.value) {
+        scheduleStreamSync();
+      }
+      activateInput();
+    });
+
+    applyUiSettings();
+    renderShortcutBar();
+
+    function activateInput() {
+      if (input.hasAttribute('readonly')) {
+        input.removeAttribute('readonly');
+      }
+      if (document.activeElement !== input) {
+        input.focus({ preventScroll: true });
+      }
+    }
+
+    function isComposerActionTarget(target) {
+      return target instanceof Element && Boolean(
+        target.closest('.send-button') || target.closest('.mic-button')
+      );
+    }
+
+    composerWrap.addEventListener('touchstart', (e) => {
+      if (isComposerActionTarget(e.target)) {
+        return;
+      }
+      activateInput();
+    }, { passive: true });
+
+    composerWrap.addEventListener('mousedown', (e) => {
+      if (isComposerActionTarget(e.target)) {
+        return;
+      }
+      activateInput();
+    });
+
+    function syncComposerState() {
+      const hasText = input.value.trim().length > 0;
+      const showSend = uiSettings.streamMode || hasText;
+      sendSlot.classList.toggle('is-visible', showSend);
+      sendSlot.setAttribute('aria-hidden', showSend ? 'false' : 'true');
+      sendBtn.disabled = uiSettings.streamMode ? false : !hasText;
+      sendBtn.tabIndex = showSend ? 0 : -1;
+      sendBtn.setAttribute('aria-disabled', showSend && !sendBtn.disabled ? 'false' : 'true');
+    }
+
+    function syncTextareaHeight() {
+      input.style.height = '52px';
+    }
+
+    function commonPrefixLength(a, b) {
+      const max = Math.min(a.length, b.length);
+      let i = 0;
+      while (i < max && a[i] === b[i]) {
+        i += 1;
+      }
+      return i;
+    }
+
+    async function pasteText(text) {
+      const res = await fetch('/api/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        return true;
+      }
+      setStatus(data.message || '同步失败', false);
+      return false;
+    }
+
+    async function flushStreamSync() {
+      if (!uiSettings.streamMode || isComposing) {
+        return;
+      }
+
+      if (streamBusy) {
+        streamQueued = true;
+        return;
+      }
+
+      streamBusy = true;
+      try {
+        do {
+          streamQueued = false;
+          const text = input.value;
+          if (text === lastStreamedText) {
+            break;
+          }
+
+          const prefixLen = commonPrefixLength(text, lastStreamedText);
+          const deleteCount = lastStreamedText.length - prefixLen;
+          const insertText = text.slice(prefixLen);
+
+          if (deleteCount > 0) {
+            const backs = Array.from({ length: deleteCount }, () => 'backspace').join(',');
+            const ok = await sendKey(backs, false);
+            if (!ok) {
+              break;
+            }
+            lastStreamedText = lastStreamedText.slice(0, prefixLen);
+          }
+
+          if (insertText) {
+            const ok = await pasteText(insertText);
+            if (!ok) {
+              break;
+            }
+            lastStreamedText += insertText;
+          }
+
+          if (lastStreamedText === input.value) {
+            setStatus('已实时同步', true);
+          }
+        } while (streamQueued && uiSettings.streamMode && !isComposing);
+      } catch {
+        setStatus('网络错误，请确认手机和电脑在同一 WiFi', false);
+      } finally {
+        streamBusy = false;
+        if (streamQueued && uiSettings.streamMode && !isComposing) {
+          streamQueued = false;
+          flushStreamSync();
+        }
+      }
+    }
+
+    function scheduleStreamSync() {
+      if (!uiSettings.streamMode || isComposing) {
+        return;
+      }
+      if (streamTimer) {
+        window.clearTimeout(streamTimer);
+      }
+      streamTimer = window.setTimeout(() => {
+        streamTimer = 0;
+        flushStreamSync();
+      }, 40);
+    }
+
+    async function finishStreamWithEnter() {
+      if (streamTimer) {
+        window.clearTimeout(streamTimer);
+        streamTimer = 0;
+      }
+      if (!isComposing) {
+        await flushStreamSync();
+      }
+
+      sendBtn.disabled = true;
+      setStatus('正在按 Enter…', true);
+
+      try {
+        const ok = await sendKey('enter', '已按下 Enter，流式传递已关闭');
+        input.value = '';
+        lastStreamedText = '';
+        syncComposerState();
+        syncTextareaHeight();
+
+        uiSettings.streamMode = false;
+        saveSettings(uiSettings);
+        applyUiSettings();
+
+        if (!ok) {
+          setStatus('回车发送失败，流式传递已关闭', false);
+        }
+      } catch {
+        uiSettings.streamMode = false;
+        lastStreamedText = '';
+        saveSettings(uiSettings);
+        applyUiSettings();
+        setStatus('网络错误，流式传递已关闭', false);
+      } finally {
+        syncComposerState();
+      }
+    }
+
+    input.addEventListener('focus', () => composerShell.classList.add('is-focused'));
+    input.addEventListener('blur', () => composerShell.classList.remove('is-focused'));
+    input.addEventListener('compositionstart', () => {
+      isComposing = true;
+    });
+    input.addEventListener('compositionend', () => {
+      isComposing = false;
+      if (uiSettings.streamMode) {
+        scheduleStreamSync();
+      }
+    });
+    input.addEventListener('input', () => {
+      syncComposerState();
+      input.style.height = 'auto';
+      input.style.height = Math.min(input.scrollHeight, 200) + 'px';
+      if (uiSettings.streamMode && !isComposing) {
+        scheduleStreamSync();
+      }
+    });
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        if (uiSettings.streamMode) {
+          finishStreamWithEnter();
+          return;
+        }
+        if (input.value.trim()) {
+          sendText();
+        }
+      }
+    });
+
     async function sendText() {
+      if (uiSettings.streamMode) {
+        await finishStreamWithEnter();
+        return;
+      }
+
       const text = input.value;
       if (!text.trim()) {
         setStatus('请先输入一些文字', false);
@@ -137,24 +1620,527 @@
         });
         const data = await res.json();
         if (res.ok && data.ok) {
-          setStatus(data.message || '已发送', true);
+          input.value = '';
+          syncComposerState();
+          syncTextareaHeight();
+
+          if (uiSettings.sendEnterAfterSync) {
+            setStatus('文字已发送，正在按 Enter…', true);
+            await sendKey('enter', '已发送并按下 Enter');
+          } else {
+            setStatus(data.message || '已发送', true);
+          }
         } else {
           setStatus(data.message || '发送失败', false);
         }
       } catch (err) {
         setStatus('网络错误，请确认手机和电脑在同一 WiFi', false);
       } finally {
-        sendBtn.disabled = false;
+        syncComposerState();
       }
     }
 
-    sendBtn.addEventListener('click', sendText);
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        sendText();
+    sendBtn.addEventListener('click', () => {
+      if (uiSettings.streamMode) {
+        finishStreamWithEnter();
+        return;
+      }
+      if (!input.value.trim()) {
+        return;
+      }
+      sendText();
+    });
+
+    // —— 语音输入：手机录音 → 电脑 Windows 语音识别转文字 ——
+    let isListening = false;
+    let speechBusy = false;
+    let mediaStream = null;
+    let audioContext = null;
+    let audioProcessor = null;
+    let audioSource = null;
+    let recordChunks = [];
+    let recordSampleRate = 16000;
+
+    function isSecureForMic() {
+      return window.isSecureContext
+        || location.protocol === 'https:'
+        || location.hostname === 'localhost'
+        || location.hostname === '127.0.0.1';
+    }
+
+    function setListeningUi(listening) {
+      isListening = listening;
+      micBtn.classList.toggle('is-listening', listening);
+      micBtn.setAttribute('aria-pressed', listening ? 'true' : 'false');
+      micBtn.setAttribute('aria-label', listening ? '结束录音' : '语音输入');
+    }
+
+    function mergeFloat32(chunks) {
+      let total = 0;
+      for (let i = 0; i < chunks.length; i += 1) {
+        total += chunks[i].length;
+      }
+      const merged = new Float32Array(total);
+      let offset = 0;
+      for (let i = 0; i < chunks.length; i += 1) {
+        merged.set(chunks[i], offset);
+        offset += chunks[i].length;
+      }
+      return merged;
+    }
+
+    function downsampleBuffer(buffer, fromRate, toRate) {
+      if (fromRate === toRate) {
+        return buffer;
+      }
+      const ratio = fromRate / toRate;
+      const newLen = Math.max(1, Math.round(buffer.length / ratio));
+      const result = new Float32Array(newLen);
+      for (let i = 0; i < newLen; i += 1) {
+        const idx = Math.min(buffer.length - 1, Math.floor(i * ratio));
+        result[i] = buffer[idx];
+      }
+      return result;
+    }
+
+    function encodeWav(samples, sampleRate) {
+      const buffer = new ArrayBuffer(44 + samples.length * 2);
+      const view = new DataView(buffer);
+
+      function writeString(offset, value) {
+        for (let i = 0; i < value.length; i += 1) {
+          view.setUint8(offset + i, value.charCodeAt(i));
+        }
+      }
+
+      writeString(0, 'RIFF');
+      view.setUint32(4, 36 + samples.length * 2, true);
+      writeString(8, 'WAVE');
+      writeString(12, 'fmt ');
+      view.setUint32(16, 16, true);
+      view.setUint16(20, 1, true);
+      view.setUint16(22, 1, true);
+      view.setUint32(24, sampleRate, true);
+      view.setUint32(28, sampleRate * 2, true);
+      view.setUint16(32, 2, true);
+      view.setUint16(34, 16, true);
+      writeString(36, 'data');
+      view.setUint32(40, samples.length * 2, true);
+
+      let offset = 44;
+      for (let i = 0; i < samples.length; i += 1) {
+        const s = Math.max(-1, Math.min(1, samples[i]));
+        view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+        offset += 2;
+      }
+      return buffer;
+    }
+
+    function cleanupAudioGraph() {
+      if (audioProcessor) {
+        try {
+          audioProcessor.disconnect();
+        } catch {
+          // ignore
+        }
+        audioProcessor.onaudioprocess = null;
+        audioProcessor = null;
+      }
+      if (audioSource) {
+        try {
+          audioSource.disconnect();
+        } catch {
+          // ignore
+        }
+        audioSource = null;
+      }
+      if (audioContext) {
+        const ctx = audioContext;
+        audioContext = null;
+        ctx.close().catch(() => {});
+      }
+      if (mediaStream) {
+        mediaStream.getTracks().forEach((track) => track.stop());
+        mediaStream = null;
+      }
+      recordChunks = [];
+    }
+
+    async function startRecording() {
+      if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+        setStatus('当前浏览器不支持录音', false);
+        return;
+      }
+      if (!isSecureForMic()) {
+        setStatus('语音需要 HTTPS，请打开：https://' + location.hostname + ':8766', false);
+        return;
+      }
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          channelCount: 1,
+        },
+      });
+
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      const ctx = new AudioCtx();
+      if (ctx.state === 'suspended') {
+        await ctx.resume();
+      }
+
+      const source = ctx.createMediaStreamSource(stream);
+      const processor = ctx.createScriptProcessor(4096, 1, 1);
+      const chunks = [];
+
+      processor.onaudioprocess = (event) => {
+        if (!isListening) {
+          return;
+        }
+        const input = event.inputBuffer.getChannelData(0);
+        chunks.push(new Float32Array(input));
+      };
+
+      source.connect(processor);
+      // ScriptProcessor 必须连到 destination 才会回调；增益设为 0 避免外放回授
+      const mute = ctx.createGain();
+      mute.gain.value = 0;
+      processor.connect(mute);
+      mute.connect(ctx.destination);
+
+      mediaStream = stream;
+      audioContext = ctx;
+      audioSource = source;
+      audioProcessor = processor;
+      recordChunks = chunks;
+      recordSampleRate = ctx.sampleRate || 48000;
+
+      setListeningUi(true);
+      setStatus('录音中…说完再点一次麦克风结束', true);
+    }
+
+    async function stopRecordingAndTranscribe() {
+      setListeningUi(false);
+      setStatus('正在识别…', true);
+
+      const chunks = recordChunks.slice();
+      const sampleRate = recordSampleRate;
+      cleanupAudioGraph();
+
+      if (!chunks.length) {
+        setStatus('没有录到声音，请再试一次', false);
+        return;
+      }
+
+      const merged = mergeFloat32(chunks);
+      const pcm16k = downsampleBuffer(merged, sampleRate, 16000);
+      if (pcm16k.length < 1600) {
+        setStatus('说话时间太短，请再说长一点', false);
+        return;
+      }
+
+      const wav = encodeWav(pcm16k, 16000);
+
+      try {
+        const res = await fetch('/api/stt', {
+          method: 'POST',
+          headers: { 'Content-Type': 'audio/wav' },
+          body: wav,
+        });
+        const data = await res.json();
+        if (res.ok && data.ok && data.text) {
+          const prefix = input.value;
+          input.value = prefix + data.text;
+          syncComposerState();
+          input.style.height = 'auto';
+          input.style.height = Math.min(input.scrollHeight, 200) + 'px';
+          if (uiSettings.streamMode && !isComposing) {
+            scheduleStreamSync();
+          }
+          setStatus('识别完成，可编辑后发送', true);
+          activateInput();
+        } else {
+          setStatus((data && data.message) || '识别失败', false);
+        }
+      } catch {
+        setStatus('识别请求失败，请确认手机和电脑在同一 WiFi', false);
+      }
+    }
+
+    async function toggleSpeechRecognition() {
+      if (isListening) {
+        if (speechBusy) {
+          return;
+        }
+        speechBusy = true;
+        try {
+          await stopRecordingAndTranscribe();
+        } finally {
+          speechBusy = false;
+        }
+        return;
+      }
+
+      if (speechBusy) {
+        return;
+      }
+      speechBusy = true;
+      try {
+        await startRecording();
+      } catch (err) {
+        cleanupAudioGraph();
+        setListeningUi(false);
+        const name = err && err.name ? err.name : '';
+        if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+          setStatus('麦克风权限被拒绝，请在浏览器设置中允许', false);
+        } else if (name === 'NotFoundError') {
+          setStatus('未检测到麦克风', false);
+        } else {
+          setStatus('无法开始录音：' + ((err && err.message) || name || '未知错误'), false);
+        }
+      } finally {
+        speechBusy = false;
+      }
+    }
+
+    micBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      toggleSpeechRecognition();
+    });
+
+    syncComposerState();
+
+    const gyroPad = document.getElementById('gyroPad');
+    const gyroDot = document.getElementById('gyroDot');
+    const gyroStatus = document.getElementById('gyroStatus');
+    const gyroHint = document.getElementById('gyroHint');
+    const gyroToggleBtn = document.getElementById('gyroToggleBtn');
+    const gyroClickBtn = document.getElementById('gyroClickBtn');
+
+    const TOUCH_PAD_SETTINGS_KEY = 'phone-input-sync.touchpad';
+    const defaultTouchPadSettings = { sensitivity: 1.8 };
+
+    function loadTouchPadSettings() {
+      try {
+        const raw = localStorage.getItem(TOUCH_PAD_SETTINGS_KEY)
+          || localStorage.getItem('phone-input-sync.gyro');
+        if (!raw) {
+          return { ...defaultTouchPadSettings };
+        }
+        const parsed = JSON.parse(raw);
+        return {
+          sensitivity: Number(parsed.sensitivity) || defaultTouchPadSettings.sensitivity,
+        };
+      } catch {
+        return { ...defaultTouchPadSettings };
+      }
+    }
+
+    const touchPadSettings = loadTouchPadSettings();
+
+    const touchPadState = {
+      active: false,
+      dragging: false,
+      moved: false,
+      lastPointerX: 0,
+      lastPointerY: 0,
+      pendingDx: 0,
+      pendingDy: 0,
+      sending: false,
+      loopId: 0,
+    };
+
+    function setGyroStatus(text, kind) {
+      gyroStatus.textContent = text;
+      gyroStatus.className = 'gyro-status' + (kind ? ` is-${kind}` : '');
+    }
+
+    function getPadMetrics() {
+      const rect = gyroPad.getBoundingClientRect();
+      return {
+        centerX: rect.left + rect.width / 2,
+        centerY: rect.top + rect.height / 2,
+        maxRadius: Math.min(rect.width, rect.height) * 0.36,
+      };
+    }
+
+    function setDotOffset(offsetX, offsetY) {
+      const { maxRadius } = getPadMetrics();
+      const distance = Math.hypot(offsetX, offsetY);
+      if (distance > maxRadius) {
+        offsetX = (offsetX / distance) * maxRadius;
+        offsetY = (offsetY / distance) * maxRadius;
+      }
+      gyroDot.style.transform = `translate(${offsetX}px, ${offsetY}px)`;
+    }
+
+    function resetDot() {
+      gyroDot.style.transform = 'translate(0, 0)';
+    }
+
+    async function flushMouseMove() {
+      const dx = Math.round(touchPadState.pendingDx);
+      const dy = Math.round(touchPadState.pendingDy);
+      touchPadState.pendingDx -= dx;
+      touchPadState.pendingDy -= dy;
+
+      if (dx === 0 && dy === 0) {
+        return;
+      }
+
+      if (touchPadState.sending) {
+        touchPadState.pendingDx += dx;
+        touchPadState.pendingDy += dy;
+        return;
+      }
+
+      touchPadState.sending = true;
+      try {
+        await fetch('/api/mouse/move', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dx, dy }),
+          keepalive: true,
+        });
+      } catch {
+        setGyroStatus('网络断开，鼠标控制暂停', 'error');
+      } finally {
+        touchPadState.sending = false;
+      }
+    }
+
+    async function sendMouseClick(button) {
+      try {
+        const res = await fetch('/api/mouse/click', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ button }),
+        });
+        const data = await res.json();
+        if (res.ok && data.ok) {
+          setGyroStatus(button === 'right' ? '已发送右键点击' : '已发送左键点击', 'active');
+          return true;
+        }
+        setGyroStatus(data.message || '点击发送失败', 'error');
+      } catch {
+        setGyroStatus('网络错误，点击失败', 'error');
+      }
+      return false;
+    }
+
+    function onTouchPadFrame() {
+      if (!touchPadState.active) {
+        return;
+      }
+      flushMouseMove();
+      touchPadState.loopId = window.requestAnimationFrame(onTouchPadFrame);
+    }
+
+    function startTouchPadLoop() {
+      if (touchPadState.loopId) {
+        return;
+      }
+      touchPadState.loopId = window.requestAnimationFrame(onTouchPadFrame);
+    }
+
+    function stopTouchPadLoop() {
+      if (!touchPadState.loopId) {
+        return;
+      }
+      window.cancelAnimationFrame(touchPadState.loopId);
+      touchPadState.loopId = 0;
+      touchPadState.pendingDx = 0;
+      touchPadState.pendingDy = 0;
+      resetDot();
+    }
+
+    function enableTouchPad() {
+      touchPadState.active = true;
+      gyroPad.classList.add('is-active');
+      gyroToggleBtn.textContent = '停用';
+      gyroToggleBtn.classList.add('is-on');
+      setGyroStatus('拖动圆点控制鼠标', 'active');
+      gyroHint.textContent = '按住并拖动圆点，往哪滑光标就往哪走';
+      startTouchPadLoop();
+    }
+
+    function disableTouchPad() {
+      touchPadState.active = false;
+      touchPadState.dragging = false;
+      touchPadState.moved = false;
+      gyroPad.classList.remove('is-active', 'is-dragging');
+      gyroToggleBtn.textContent = '启用';
+      gyroToggleBtn.classList.remove('is-on');
+      stopTouchPadLoop();
+      setGyroStatus('已停用', '');
+      gyroHint.textContent = '拖动圆点移动光标，轻触圆点左键单击';
+    }
+
+    gyroToggleBtn.addEventListener('click', () => {
+      if (touchPadState.active) {
+        disableTouchPad();
+      } else {
+        enableTouchPad();
       }
     });
+
+    gyroClickBtn.addEventListener('click', () => {
+      sendMouseClick('right');
+    });
+
+    gyroPad.addEventListener('pointerdown', (event) => {
+      if (!touchPadState.active) {
+        return;
+      }
+      event.preventDefault();
+      gyroPad.classList.add('is-dragging');
+      gyroPad.setPointerCapture(event.pointerId);
+      touchPadState.dragging = true;
+      touchPadState.moved = false;
+      touchPadState.lastPointerX = event.clientX;
+      touchPadState.lastPointerY = event.clientY;
+
+      const { centerX, centerY } = getPadMetrics();
+      setDotOffset(event.clientX - centerX, event.clientY - centerY);
+    });
+
+    gyroPad.addEventListener('pointermove', (event) => {
+      if (!touchPadState.active || !touchPadState.dragging) {
+        return;
+      }
+
+      const dx = (event.clientX - touchPadState.lastPointerX) * touchPadSettings.sensitivity;
+      const dy = (event.clientY - touchPadState.lastPointerY) * touchPadSettings.sensitivity;
+      touchPadState.lastPointerX = event.clientX;
+      touchPadState.lastPointerY = event.clientY;
+
+      if (Math.abs(dx) >= 0.5 || Math.abs(dy) >= 0.5) {
+        touchPadState.moved = true;
+        touchPadState.pendingDx += dx;
+        touchPadState.pendingDy += dy;
+      }
+
+      const { centerX, centerY } = getPadMetrics();
+      setDotOffset(event.clientX - centerX, event.clientY - centerY);
+    });
+
+    function finishPointerDrag() {
+      if (!touchPadState.dragging) {
+        return;
+      }
+      touchPadState.dragging = false;
+      gyroPad.classList.remove('is-dragging');
+      resetDot();
+
+      if (touchPadState.active && !touchPadState.moved) {
+        sendMouseClick('left');
+      }
+    }
+
+    gyroPad.addEventListener('pointerup', finishPointerDrag);
+    gyroPad.addEventListener('pointercancel', finishPointerDrag);
   </script>
 </body>
 </html>

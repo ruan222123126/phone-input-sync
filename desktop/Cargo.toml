@@ -6,12 +6,14 @@ description = "LAN server: receive text from phone and paste into focused PC inp
 
 [dependencies]
 axum = "0.7"
+axum-server = { version = "0.7", features = ["tls-rustls"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tower-http = { version = "0.5", features = ["fs", "cors"] }
+tower-http = { version = "0.5", features = ["cors"] }
 arboard = "3"
 enigo = "0.2"
 local-ip-address = "0.6"
+rcgen = "0.13"
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "chrono"] }
