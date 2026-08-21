@@ -461,7 +461,7 @@
       max-height: 200px;
       border: 0;
       border-radius: 0;
-      padding: 14px 92px 14px 16px;
+      padding: 14px 54px 14px 16px;
       color: #202124;
       background: transparent;
       outline: none;
@@ -474,6 +474,10 @@
       -webkit-user-select: text;
       user-select: text;
       cursor: text;
+    }
+
+    .composer-shell.has-mic .composer-input {
+      padding-right: 92px;
     }
 
     .composer-input::-webkit-scrollbar {
@@ -559,6 +563,10 @@
 
     .mic-button-slot {
       pointer-events: auto;
+    }
+
+    .mic-button-slot.is-hidden {
+      display: none;
     }
 
     .mic-button .ui-icon,
@@ -883,7 +891,7 @@
     <div class="page-inner">
       <div id="pageCopy" class="page-copy">
         <h1>手机输入同步</h1>
-        <p class="hint">先在电脑上点击要输入的文本框，再在这里输入文字并发送。也可点麦克风录音，说完再点一次结束，电脑端会转成文字。</p>
+        <p class="hint">先在电脑上点击要输入的文本框，再在这里输入文字并发送。可在设置中开启语音输入。</p>
       </div>
 
       <div class="composer-stack">
@@ -900,7 +908,7 @@
                 readonly
               ></textarea>
               <div class="composer-actions">
-                <span id="micSlot" class="mic-button-slot">
+                <span id="micSlot" class="mic-button-slot is-hidden" aria-hidden="true">
                   <button id="micBtn" class="mic-button" type="button" aria-label="语音输入" aria-pressed="false">
                     <svg class="ui-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                       <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
@@ -1009,6 +1017,18 @@
         ></button>
       </div>
 
+      <div class="settings-option">
+        <span class="settings-option-label">语音输入</span>
+        <button
+          id="toggleVoice"
+          class="settings-switch"
+          type="button"
+          role="switch"
+          aria-checked="false"
+          aria-label="语音输入"
+        ></button>
+      </div>
+
       <button id="openShortcutsBtn" class="settings-nav" type="button">
         <span>快捷键设置</span>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1063,6 +1083,7 @@
     const toggleServer = document.getElementById('toggleServer');
     const toggleSendEnter = document.getElementById('toggleSendEnter');
     const toggleStream = document.getElementById('toggleStream');
+    const toggleVoice = document.getElementById('toggleVoice');
     const sendIcon = document.getElementById('sendIcon');
     const openShortcutsBtn = document.getElementById('openShortcutsBtn');
     const shortcutsModal = document.getElementById('shortcutsModal');
@@ -1082,6 +1103,7 @@
       showServer: true,
       sendEnterAfterSync: false,
       streamMode: false,
+      voiceEnabled: false,
     };
 
     const SEND_ICON_PATHS = '<path d="m5 12 7-7 7 7"></path><path d="M12 19V5"></path>';
@@ -1119,6 +1141,7 @@
           sendEnterAfterSync: parsed.sendEnterAfterSync === true,
           // 流式是一次性会话，刷新后不自动恢复，避免与电脑端不同步
           streamMode: false,
+          voiceEnabled: parsed.voiceEnabled === true,
         };
       } catch {
         return { ...defaultSettings };
@@ -1158,9 +1181,13 @@
       syncSwitch(toggleServer, uiSettings.showServer);
       syncSwitch(toggleSendEnter, uiSettings.sendEnterAfterSync);
       syncSwitch(toggleStream, uiSettings.streamMode);
+      syncSwitch(toggleVoice, uiSettings.voiceEnabled);
       // 流式会话自带收尾 Enter，期间不允许改「发送后自动按 Enter」
       toggleSendEnter.disabled = uiSettings.streamMode;
       toggleSendEnter.classList.toggle('is-locked', uiSettings.streamMode);
+      composerShell.classList.toggle('has-mic', uiSettings.voiceEnabled);
+      micSlot.classList.toggle('is-hidden', !uiSettings.voiceEnabled);
+      micSlot.setAttribute('aria-hidden', uiSettings.voiceEnabled ? 'false' : 'true');
       updateSendButtonAppearance();
       syncComposerState();
     }
@@ -1387,6 +1414,74 @@
         scheduleStreamSync();
       }
       activateInput();
+    });
+
+    async function enableVoiceFeature() {
+      toggleVoice.disabled = true;
+      toggleVoice.classList.add('is-locked');
+      setStatus('正在检查语音模型…', true);
+
+      try {
+        const statusRes = await fetch('/api/stt/status');
+        const statusData = await statusRes.json();
+        if (statusRes.ok && statusData.ready) {
+          uiSettings.voiceEnabled = true;
+          saveSettings(uiSettings);
+          applyUiSettings();
+          setStatus('语音功能已开启（已使用本地模型）', true);
+          return;
+        }
+
+        const agreed = window.confirm(
+          '开启语音输入需要在电脑上下载约 150MB 的语音模型（仅首次）。\n\n是否同意下载并开启？'
+        );
+        if (!agreed) {
+          uiSettings.voiceEnabled = false;
+          saveSettings(uiSettings);
+          applyUiSettings();
+          setStatus('已取消开启语音功能', false);
+          return;
+        }
+
+        setStatus('正在下载/准备语音模型，请稍候…', true);
+        const prepareRes = await fetch('/api/stt/prepare', { method: 'POST' });
+        const prepareData = await prepareRes.json();
+        if (prepareRes.ok && prepareData.ok && prepareData.ready) {
+          uiSettings.voiceEnabled = true;
+          saveSettings(uiSettings);
+          applyUiSettings();
+          setStatus('语音功能已开启', true);
+        } else {
+          uiSettings.voiceEnabled = false;
+          saveSettings(uiSettings);
+          applyUiSettings();
+          setStatus((prepareData && prepareData.message) || '语音模型准备失败', false);
+        }
+      } catch {
+        uiSettings.voiceEnabled = false;
+        saveSettings(uiSettings);
+        applyUiSettings();
+        setStatus('无法连接电脑端，请确认服务已启动', false);
+      } finally {
+        toggleVoice.disabled = false;
+        toggleVoice.classList.remove('is-locked');
+        applyUiSettings();
+      }
+    }
+
+    toggleVoice.addEventListener('click', () => {
+      if (uiSettings.voiceEnabled) {
+        if (isListening) {
+          setListeningUi(false);
+          cleanupAudioGraph();
+        }
+        uiSettings.voiceEnabled = false;
+        saveSettings(uiSettings);
+        applyUiSettings();
+        setStatus('语音功能已关闭', true);
+        return;
+      }
+      enableVoiceFeature();
     });
 
     applyUiSettings();
@@ -1697,8 +1792,12 @@
       const newLen = Math.max(1, Math.round(buffer.length / ratio));
       const result = new Float32Array(newLen);
       for (let i = 0; i < newLen; i += 1) {
-        const idx = Math.min(buffer.length - 1, Math.floor(i * ratio));
-        result[i] = buffer[idx];
+        const pos = i * ratio;
+        const idx = Math.floor(pos);
+        const frac = pos - idx;
+        const a = buffer[idx] || 0;
+        const b = buffer[Math.min(buffer.length - 1, idx + 1)] || 0;
+        result[i] = a + (b - a) * frac;
       }
       return result;
     }
@@ -1822,7 +1921,7 @@
 
     async function stopRecordingAndTranscribe() {
       setListeningUi(false);
-      setStatus('正在识别…', true);
+      setStatus('正在识别…首次使用会下载语音模型（约150MB），请稍候', true);
 
       const chunks = recordChunks.slice();
       const sampleRate = recordSampleRate;
@@ -1869,6 +1968,10 @@
     }
 
     async function toggleSpeechRecognition() {
+      if (!uiSettings.voiceEnabled) {
+        setStatus('请先在设置中开启语音输入', false);
+        return;
+      }
       if (isListening) {
         if (speechBusy) {
           return;

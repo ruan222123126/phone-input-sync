@@ -12,9 +12,10 @@ use local_ip_address::{list_afinet_netifas, local_ip};
 use rcgen::{CertificateParams, KeyPair, SanType};
 use serde::{Deserialize, Serialize};
 use std::{
+    fs::File,
     io::{self, Write},
     net::{IpAddr, Ipv4Addr, SocketAddr},
-    path::PathBuf,
+    path::{Path, PathBuf},
     process::Command,
     sync::{Arc, Mutex},
     thread,
@@ -71,6 +72,13 @@ struct SttResponse {
 }
 
 #[derive(Serialize)]
+struct SttStatusResponse {
+    ok: bool,
+    ready: bool,
+    message: String,
+}
+
+#[derive(Serialize)]
 struct StatusResponse {
     ok: bool,
     ip: String,
@@ -79,15 +87,14 @@ struct StatusResponse {
 }
 
 fn app_data_dir() -> PathBuf {
-    if let Ok(local_app_data) = std::env::var("LOCALAPPDATA") {
-        return PathBuf::from(local_app_data).join("phone-input-sync");
-    }
-
     std::env::current_exe()
         .ok()
         .and_then(|path| path.parent().map(|dir| dir.to_path_buf()))
         .unwrap_or_else(|| PathBuf::from("."))
-        .join("phone-input-sync-data")
+}
+
+fn whisper_dir() -> PathBuf {
+    app_data_dir().join("whisper")
 }
 
 struct InstanceLock {
@@ -327,6 +334,15 @@ fn ensure_tls_cert(lan_ips: &[Ipv4Addr]) -> Result<(PathBuf, PathBuf), String> {
     let key_path = cert_dir.join("key.pem");
     let meta_path = cert_dir.join("sans.txt");
 
+    // 同目录已有证书则直接复用，避免反复重建导致手机要重新信任
+    if cert_path.is_file() && key_path.is_file() {
+        info!(
+            "已使用程序目录下已有的 HTTPS 证书: {}",
+            cert_path.display()
+        );
+        return Ok((cert_path, key_path));
+    }
+
     let mut expected_sans: Vec<String> = vec!["127.0.0.1".into(), "localhost".into()];
     for ip in lan_ips {
         expected_sans.push(ip.to_string());
@@ -334,16 +350,6 @@ fn ensure_tls_cert(lan_ips: &[Ipv4Addr]) -> Result<(PathBuf, PathBuf), String> {
     expected_sans.sort();
     expected_sans.dedup();
     let expected_meta = expected_sans.join("\n");
-
-    let reuse = cert_path.exists()
-        && key_path.exists()
-        && std::fs::read_to_string(&meta_path)
-            .map(|content| content.trim() == expected_meta)
-            .unwrap_or(false);
-
-    if reuse {
-        return Ok((cert_path, key_path));
-    }
 
     std::fs::create_dir_all(&cert_dir).map_err(|e| format!("创建证书目录失败: {e}"))?;
 
@@ -367,6 +373,7 @@ fn ensure_tls_cert(lan_ips: &[Ipv4Addr]) -> Result<(PathBuf, PathBuf), String> {
     std::fs::write(&key_path, key_pair.serialize_pem())
         .map_err(|e| format!("写入密钥失败: {e}"))?;
     std::fs::write(&meta_path, expected_meta).map_err(|e| format!("写入证书元数据失败: {e}"))?;
+    info!("已在程序目录生成 HTTPS 证书: {}", cert_path.display());
 
     Ok((cert_path, key_path))
 }
@@ -380,6 +387,8 @@ fn build_app(state: AppState) -> Router {
     Router::new()
         .route("/api/sync", post(sync_handler))
         .route("/api/stt", post(stt_handler))
+        .route("/api/stt/status", get(stt_status_handler))
+        .route("/api/stt/prepare", post(stt_prepare_handler))
         .route("/api/key", post(key_handler))
         .route("/api/mouse/move", post(mouse_move_handler))
         .route("/api/mouse/click", post(mouse_click_handler))
@@ -787,10 +796,240 @@ async fn sync_handler(
     }
 }
 
-fn transcribe_wav_with_windows_speech(wav_bytes: &[u8]) -> Result<String, String> {
+const WHISPER_BIN_URLS: &[&str] = &[
+    "https://github.com/ggml-org/whisper.cpp/releases/download/b4938/whisper-bin-x64.zip",
+    "https://ghfast.top/https://github.com/ggml-org/whisper.cpp/releases/download/b4938/whisper-bin-x64.zip",
+];
+
+const WHISPER_MODEL_NAME: &str = "ggml-base.bin";
+const WHISPER_MODEL_URLS: &[&str] = &[
+    "https://hf-mirror.com/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
+    "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
+];
+
+fn download_file(urls: &[&str], dest: &Path, label: &str) -> Result<(), String> {
+    if let Some(parent) = dest.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| format!("创建目录失败: {e}"))?;
+    }
+
+    let tmp = dest.with_extension("download");
+    let mut last_error = String::from("无可用下载地址");
+
+    for url in urls {
+        info!("正在下载{label}: {url}");
+        let dest_literal = tmp.to_string_lossy().replace('\'', "''");
+        let url_literal = url.replace('\'', "''");
+        let script = format!(
+            "$ErrorActionPreference = 'Stop'; Invoke-WebRequest -Uri '{url_literal}' -OutFile '{dest_literal}' -UseBasicParsing"
+        );
+
+        let output = Command::new("powershell")
+            .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &script])
+            .output()
+            .map_err(|e| format!("启动下载失败: {e}"))?;
+
+        if output.status.success() && tmp.is_file() {
+            std::fs::rename(&tmp, dest).map_err(|e| format!("保存文件失败: {e}"))?;
+            info!("已下载{label}: {}", dest.display());
+            return Ok(());
+        }
+
+        last_error = String::from_utf8_lossy(&output.stderr).trim().to_string();
+        if last_error.is_empty() {
+            last_error = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        }
+        if last_error.is_empty() {
+            last_error = "下载失败".into();
+        }
+        let _ = std::fs::remove_file(&tmp);
+    }
+
+    Err(format!("下载{label}失败: {last_error}"))
+}
+
+fn unzip_whisper_bin(zip_path: &Path, dest_dir: &Path) -> Result<(), String> {
+    let file = File::open(zip_path).map_err(|e| format!("打开压缩包失败: {e}"))?;
+    let mut archive = zip::ZipArchive::new(file).map_err(|e| format!("读取压缩包失败: {e}"))?;
+
+    for i in 0..archive.len() {
+        let mut entry = archive
+            .by_index(i)
+            .map_err(|e| format!("读取压缩项失败: {e}"))?;
+        let name = entry.name().replace('\\', "/");
+        let file_name = Path::new(&name)
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .filter(|n| !n.is_empty());
+        let Some(file_name) = file_name else {
+            continue;
+        };
+        if entry.is_dir() {
+            continue;
+        }
+
+        let out_path = dest_dir.join(&file_name);
+        let mut out = File::create(&out_path).map_err(|e| format!("解压写入失败: {e}"))?;
+        io::copy(&mut entry, &mut out).map_err(|e| format!("解压复制失败: {e}"))?;
+    }
+
+    Ok(())
+}
+
+fn find_whisper_exe(dir: &Path) -> Option<PathBuf> {
+    const CANDIDATES: &[&str] = &["whisper-cli.exe", "main.exe", "whisper.exe"];
+    for name in CANDIDATES {
+        let path = dir.join(name);
+        if path.is_file() {
+            return Some(path);
+        }
+    }
+    None
+}
+
+fn file_nonempty(path: &Path, min_bytes: u64) -> bool {
+    std::fs::metadata(path)
+        .map(|meta| meta.is_file() && meta.len() >= min_bytes)
+        .unwrap_or(false)
+}
+
+fn find_whisper_model(dirs: &[PathBuf]) -> Option<PathBuf> {
+    const PREFERRED: &[&str] = &[
+        "ggml-base.bin",
+        "ggml-small.bin",
+        "ggml-tiny.bin",
+        "ggml-medium.bin",
+    ];
+    // 至少几 MB，避免把下到一半的空文件当成可用模型
+    const MIN_MODEL_BYTES: u64 = 5 * 1024 * 1024;
+
+    for dir in dirs {
+        for name in PREFERRED {
+            let path = dir.join(name);
+            if file_nonempty(&path, MIN_MODEL_BYTES) {
+                return Some(path);
+            }
+        }
+
+        if let Ok(entries) = std::fs::read_dir(dir) {
+            let mut matches: Vec<PathBuf> = entries
+                .filter_map(|entry| entry.ok())
+                .map(|entry| entry.path())
+                .filter(|path| {
+                    path.extension()
+                        .and_then(|ext| ext.to_str())
+                        .map(|ext| ext.eq_ignore_ascii_case("bin"))
+                        .unwrap_or(false)
+                        && path
+                            .file_name()
+                            .and_then(|name| name.to_str())
+                            .map(|name| name.to_ascii_lowercase().starts_with("ggml-"))
+                            .unwrap_or(false)
+                        && file_nonempty(path, MIN_MODEL_BYTES)
+                })
+                .collect();
+            matches.sort();
+            if let Some(path) = matches.into_iter().next() {
+                return Some(path);
+            }
+        }
+    }
+
+    None
+}
+
+fn whisper_search_dirs() -> Vec<PathBuf> {
+    let root = app_data_dir();
+    let nested = whisper_dir();
+    if nested == root {
+        vec![nested]
+    } else {
+        vec![nested, root]
+    }
+}
+
+fn whisper_runtime_status() -> (bool, String) {
+    let search_dirs = whisper_search_dirs();
+    let has_model = find_whisper_model(&search_dirs).is_some();
+    let has_exe = search_dirs.iter().any(|dir| find_whisper_exe(dir).is_some());
+    match (has_exe, has_model) {
+        (true, true) => (true, "语音模型已就绪".into()),
+        (false, true) => (false, "已有模型，但缺少语音引擎".into()),
+        (true, false) => (false, "已有引擎，但缺少语音模型".into()),
+        (false, false) => (false, "未安装语音模型".into()),
+    }
+}
+
+fn ensure_whisper_runtime() -> Result<(PathBuf, PathBuf), String> {
+    let search_dirs = whisper_search_dirs();
+    let install_dir = whisper_dir();
+
+    let existing_model = find_whisper_model(&search_dirs);
+    let existing_exe = search_dirs.iter().find_map(|dir| find_whisper_exe(dir));
+
+    if let (Some(exe), Some(model)) = (existing_exe.clone(), existing_model.clone()) {
+        info!(
+            "已使用本地 Whisper（跳过下载）：引擎={} 模型={}",
+            exe.display(),
+            model.display()
+        );
+        return Ok((exe, model));
+    }
+
+    std::fs::create_dir_all(&install_dir).map_err(|e| format!("创建 whisper 目录失败: {e}"))?;
+
+    let model_path = if let Some(model) = existing_model {
+        info!("已使用本地语音模型: {}", model.display());
+        model
+    } else {
+        let model_path = install_dir.join(WHISPER_MODEL_NAME);
+        info!("未找到本地语音模型，开始下载（约 148MB）…");
+        download_file(WHISPER_MODEL_URLS, &model_path, "语音模型")?;
+        model_path
+    };
+
+    let exe = if let Some(exe) = existing_exe {
+        info!("已使用本地语音引擎: {}", exe.display());
+        exe
+    } else {
+        let zip_path = install_dir.join("whisper-bin-x64.zip");
+        info!("未找到本地语音引擎，开始下载…");
+        download_file(WHISPER_BIN_URLS, &zip_path, "语音引擎")?;
+        unzip_whisper_bin(&zip_path, &install_dir)?;
+        let _ = std::fs::remove_file(&zip_path);
+        find_whisper_exe(&install_dir).ok_or_else(|| {
+            "未找到 whisper 可执行文件，请删除程序目录下的 whisper 文件夹后重试".to_string()
+        })?
+    };
+
+    Ok((exe, model_path))
+}
+
+fn cleanup_whisper_hallucinations(text: &str) -> String {
+    let trimmed = text.trim();
+    const NOISE: &[&str] = &[
+        "字幕by索兰娅",
+        "字幕 by",
+        "谢谢观看",
+        "感謝收看",
+        "请不吝点赞",
+        "订阅",
+        "打赏",
+        "明镜与点点栏目",
+    ];
+    for noise in NOISE {
+        if trimmed == *noise || trimmed.contains(noise) && trimmed.chars().count() <= 20 {
+            return String::new();
+        }
+    }
+    trimmed.to_string()
+}
+
+fn transcribe_wav_with_whisper(wav_bytes: &[u8]) -> Result<String, String> {
     if wav_bytes.len() < 44 {
         return Err("录音太短或无效".into());
     }
+
+    let (exe, model_path) = ensure_whisper_runtime()?;
 
     let stt_dir = app_data_dir().join("stt");
     std::fs::create_dir_all(&stt_dir).map_err(|e| format!("创建语音目录失败: {e}"))?;
@@ -800,81 +1039,93 @@ fn transcribe_wav_with_windows_speech(wav_bytes: &[u8]) -> Result<String, String
         .map(|d| d.as_millis())
         .unwrap_or(0);
     let wav_path = stt_dir.join(format!("utterance-{id}.wav"));
-    let script_path = stt_dir.join(format!("recognize-{id}.ps1"));
-    let out_path = stt_dir.join(format!("result-{id}.txt"));
+    let out_base = stt_dir.join(format!("result-{id}"));
+    let out_txt = stt_dir.join(format!("result-{id}.txt"));
 
     std::fs::write(&wav_path, wav_bytes).map_err(|e| format!("保存录音失败: {e}"))?;
 
-    let wav_literal = wav_path.to_string_lossy().replace('\'', "''");
-    let out_literal = out_path.to_string_lossy().replace('\'', "''");
-    let script = format!(
-        r#"$ErrorActionPreference = 'Stop'
-Add-Type -AssemblyName System.Speech
-$wav = '{wav_literal}'
-$out = '{out_literal}'
-$engine = $null
-try {{
-  $engine = New-Object System.Speech.Recognition.SpeechRecognitionEngine ([System.Globalization.CultureInfo]::new('zh-CN'))
-}} catch {{
-  $engine = New-Object System.Speech.Recognition.SpeechRecognitionEngine
-}}
-try {{
-  $engine.LoadGrammar((New-Object System.Speech.Recognition.DictationGrammar))
-  $engine.SetInputToWaveFile($wav)
-  $engine.InitialSilenceTimeout = [TimeSpan]::FromSeconds(2)
-  $engine.BabbleTimeout = [TimeSpan]::FromSeconds(2)
-  $engine.EndSilenceTimeout = [TimeSpan]::FromSeconds(0.6)
-  $result = $engine.Recognize([TimeSpan]::FromSeconds(45))
-  $text = if ($null -eq $result) {{ '' }} else {{ $result.Text }}
-  $utf8 = New-Object System.Text.UTF8Encoding $false
-  [System.IO.File]::WriteAllText($out, $text, $utf8)
-}} finally {{
-  if ($null -ne $engine) {{ $engine.Dispose() }}
-}}
-"#
-    );
+    let model_arg = model_path.to_string_lossy().into_owned();
+    let wav_arg = wav_path.to_string_lossy().into_owned();
+    let out_arg = out_base.to_string_lossy().into_owned();
 
-    std::fs::write(&script_path, script).map_err(|e| format!("写入识别脚本失败: {e}"))?;
-
-    let output = Command::new("powershell")
+    let output = Command::new(&exe)
+        .current_dir(whisper_dir())
         .args([
-            "-NoProfile",
-            "-ExecutionPolicy",
-            "Bypass",
-            "-File",
-            script_path.to_string_lossy().as_ref(),
+            "-m",
+            &model_arg,
+            "-f",
+            &wav_arg,
+            "-l",
+            "zh",
+            "-nt",
+            "-np",
+            "-otxt",
+            "-of",
+            &out_arg,
         ])
         .output()
-        .map_err(|e| format!("启动语音识别失败: {e}"))?;
+        .map_err(|e| format!("启动 Whisper 失败: {e}"))?;
 
-    let text_result = if output.status.success() {
-        std::fs::read_to_string(&out_path).map_err(|e| format!("读取识别结果失败: {e}"))
+    let text_result = if out_txt.is_file() {
+        std::fs::read_to_string(&out_txt).map_err(|e| format!("读取识别结果失败: {e}"))
+    } else if output.status.success() {
+        Ok(String::from_utf8_lossy(&output.stdout).to_string())
     } else {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        let stderr = stderr.trim();
-        if stderr.contains("zh-CN") || stderr.contains("culture") || stderr.contains("Culture") {
-            Err(
-                "电脑未安装中文语音识别。请到 Windows 设置 → 时间和语言 → 语音，安装中文语音包后重试。"
-                    .into(),
-            )
-        } else {
-            Err(if stderr.is_empty() {
-                "Windows 语音识别失败".into()
-            } else {
-                format!("Windows 语音识别失败: {stderr}")
-            })
-        }
+        Err(format!(
+            "Whisper 识别失败: {}",
+            stderr.trim().chars().take(240).collect::<String>()
+        ))
     };
 
     let _ = std::fs::remove_file(&wav_path);
-    let _ = std::fs::remove_file(&script_path);
-    let _ = std::fs::remove_file(&out_path);
+    let _ = std::fs::remove_file(&out_txt);
 
-    let text = text_result?.trim().to_string();
+    let text = cleanup_whisper_hallucinations(&text_result?);
     if text.is_empty() {
-        return Err("没有识别到内容，请靠近麦克风再说一次".into());
+        return Err("没有识别到内容，请靠近麦克风、说清楚后再试".into());
     }
     Ok(text)
+}
+
+async fn stt_status_handler() -> impl IntoResponse {
+    let (ready, message) = whisper_runtime_status();
+    Json(SttStatusResponse {
+        ok: true,
+        ready,
+        message,
+    })
+}
+
+async fn stt_prepare_handler() -> impl IntoResponse {
+    let result = tokio::task::spawn_blocking(|| ensure_whisper_runtime().map(|_| ()))
+        .await
+        .unwrap_or_else(|e| Err(format!("准备语音模型任务失败: {e}")));
+
+    match result {
+        Ok(()) => {
+            info!("语音模型已准备就绪");
+            (
+                StatusCode::OK,
+                Json(SttStatusResponse {
+                    ok: true,
+                    ready: true,
+                    message: "语音模型已准备就绪".into(),
+                }),
+            )
+        }
+        Err(message) => {
+            error!("准备语音模型失败: {message}");
+            (
+                StatusCode::BAD_REQUEST,
+                Json(SttStatusResponse {
+                    ok: false,
+                    ready: false,
+                    message,
+                }),
+            )
+        }
+    }
 }
 
 async fn stt_handler(body: Bytes) -> impl IntoResponse {
@@ -890,10 +1141,9 @@ async fn stt_handler(body: Bytes) -> impl IntoResponse {
     }
 
     let wav_bytes = body.to_vec();
-    let result =
-        tokio::task::spawn_blocking(move || transcribe_wav_with_windows_speech(&wav_bytes))
-            .await
-            .unwrap_or_else(|e| Err(format!("语音识别任务失败: {e}")));
+    let result = tokio::task::spawn_blocking(move || transcribe_wav_with_whisper(&wav_bytes))
+        .await
+        .unwrap_or_else(|e| Err(format!("语音识别任务失败: {e}")));
 
     match result {
         Ok(text) => {
