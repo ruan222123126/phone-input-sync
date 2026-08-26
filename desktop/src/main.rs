@@ -7,7 +7,7 @@ use axum::{
     Json, Router,
 };
 use axum_server::tls_rustls::RustlsConfig;
-use enigo::{Button, Coordinate, Direction, Enigo, Key, Keyboard, Mouse, Settings};
+use enigo::{Axis, Button, Coordinate, Direction, Enigo, Key, Keyboard, Mouse, Settings};
 use local_ip_address::{list_afinet_netifas, local_ip};
 use rcgen::{CertificateParams, KeyPair, SanType};
 use serde::{Deserialize, Serialize};
@@ -30,10 +30,17 @@ const MOBILE_INDEX: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/..
 const PORT: u16 = 8765;
 const HTTPS_PORT: u16 = 8766;
 
+#[derive(Clone, Debug)]
+struct LockedWindow {
+    hwnd: isize,
+    title: String,
+}
+
 #[derive(Clone)]
 struct AppState {
     last_text: Arc<Mutex<String>>,
     enigo: Arc<Mutex<Enigo>>,
+    locked_window: Arc<Mutex<Option<LockedWindow>>>,
 }
 
 #[derive(Deserialize)]
@@ -56,6 +63,14 @@ struct MouseMoveRequest {
 struct MouseClickRequest {
     #[serde(default = "default_mouse_button")]
     button: String,
+}
+
+#[derive(Deserialize)]
+struct MouseScrollRequest {
+    #[serde(default)]
+    dx: i32,
+    #[serde(default)]
+    dy: i32,
 }
 
 #[derive(Serialize)]
@@ -84,6 +99,150 @@ struct StatusResponse {
     ip: String,
     port: u16,
     last_text: String,
+}
+
+#[derive(Serialize)]
+struct LockResponse {
+    ok: bool,
+    locked: bool,
+    title: String,
+    message: String,
+}
+
+#[cfg(windows)]
+mod win_focus {
+    use std::ffi::OsString;
+    use std::os::windows::ffi::OsStringExt;
+    use std::thread;
+    use std::time::Duration;
+
+    #[link(name = "user32")]
+    extern "system" {
+        fn GetForegroundWindow() -> isize;
+        fn SetForegroundWindow(hwnd: isize) -> i32;
+        fn IsWindow(hwnd: isize) -> i32;
+        fn GetWindowTextW(hwnd: isize, lp_string: *mut u16, n_max_count: i32) -> i32;
+        fn ShowWindow(hwnd: isize, n_cmd_show: i32) -> i32;
+        fn GetWindowThreadProcessId(hwnd: isize, lpdw_process_id: *mut u32) -> u32;
+        fn AttachThreadInput(id_attach: u32, id_attach_to: u32, f_attach: i32) -> i32;
+        fn BringWindowToTop(hwnd: isize) -> i32;
+        fn GetCurrentThreadId() -> u32;
+        fn keybd_event(b_vk: u8, b_scan: u8, dw_flags: u32, dw_extra_info: usize);
+    }
+
+    const SW_RESTORE: i32 = 9;
+    const VK_MENU: u8 = 0x12;
+    const KEYEVENTF_KEYUP: u32 = 0x0002;
+
+    pub fn capture_foreground_window() -> Option<(isize, String)> {
+        unsafe {
+            let hwnd = GetForegroundWindow();
+            if hwnd == 0 {
+                return None;
+            }
+            Some((hwnd, window_title(hwnd)))
+        }
+    }
+
+    pub fn is_window_valid(hwnd: isize) -> bool {
+        unsafe { hwnd != 0 && IsWindow(hwnd) != 0 }
+    }
+
+    pub fn focus_window(hwnd: isize) -> Result<(), String> {
+        if !is_window_valid(hwnd) {
+            return Err("锁定的窗口已关闭，请重新锁定".into());
+        }
+
+        unsafe {
+            ShowWindow(hwnd, SW_RESTORE);
+
+            let foreground = GetForegroundWindow();
+            if foreground == hwnd {
+                return Ok(());
+            }
+
+            let current_thread = GetCurrentThreadId();
+            let fg_thread = GetWindowThreadProcessId(foreground, std::ptr::null_mut());
+            let target_thread = GetWindowThreadProcessId(hwnd, std::ptr::null_mut());
+
+            if fg_thread != 0 && fg_thread != current_thread {
+                AttachThreadInput(current_thread, fg_thread, 1);
+            }
+            if target_thread != 0 && target_thread != current_thread {
+                AttachThreadInput(current_thread, target_thread, 1);
+            }
+
+            // Windows 限制后台进程抢焦点，模拟 Alt 键可解除部分限制。
+            keybd_event(VK_MENU, 0, 0, 0);
+            keybd_event(VK_MENU, 0, KEYEVENTF_KEYUP, 0);
+
+            let _ = BringWindowToTop(hwnd);
+            let _ = SetForegroundWindow(hwnd);
+
+            if fg_thread != 0 && fg_thread != current_thread {
+                AttachThreadInput(current_thread, fg_thread, 0);
+            }
+            if target_thread != 0 && target_thread != current_thread {
+                AttachThreadInput(current_thread, target_thread, 0);
+            }
+        }
+
+        thread::sleep(Duration::from_millis(50));
+        Ok(())
+    }
+
+    fn window_title(hwnd: isize) -> String {
+        unsafe {
+            let mut buf = vec![0u16; 512];
+            let len = GetWindowTextW(hwnd, buf.as_mut_ptr(), buf.len() as i32);
+            if len > 0 {
+                buf.truncate(len as usize);
+                OsString::from_wide(&buf).to_string_lossy().into_owned()
+            } else {
+                "(无标题)".into()
+            }
+        }
+    }
+}
+
+#[cfg(not(windows))]
+mod win_focus {
+    pub fn capture_foreground_window() -> Option<(isize, String)> {
+        None
+    }
+
+    pub fn is_window_valid(_hwnd: isize) -> bool {
+        false
+    }
+
+    pub fn focus_window(_hwnd: isize) -> Result<(), String> {
+        Err("窗口锁定仅支持 Windows".into())
+    }
+}
+
+fn prepare_input_target(state: &AppState) -> Result<(), String> {
+    let guard = state
+        .locked_window
+        .lock()
+        .map_err(|_| "窗口锁定状态忙，请稍后重试".to_string())?;
+
+    if let Some(win) = guard.as_ref() {
+        if !win_focus::is_window_valid(win.hwnd) {
+            return Err(format!("锁定的窗口「{}」已关闭，请重新锁定", win.title));
+        }
+        win_focus::focus_window(win.hwnd)?;
+    }
+
+    Ok(())
+}
+
+fn locked_window_message(state: &AppState) -> String {
+    state
+        .locked_window
+        .lock()
+        .ok()
+        .and_then(|guard| guard.as_ref().map(|win| format!("已发送到锁定窗口「{}」", win.title)))
+        .unwrap_or_else(|| "已发送到电脑当前输入框".into())
 }
 
 fn app_data_dir() -> PathBuf {
@@ -392,6 +551,10 @@ fn build_app(state: AppState) -> Router {
         .route("/api/key", post(key_handler))
         .route("/api/mouse/move", post(mouse_move_handler))
         .route("/api/mouse/click", post(mouse_click_handler))
+        .route("/api/mouse/scroll", post(mouse_scroll_handler))
+        .route("/api/lock", post(lock_handler))
+        .route("/api/unlock", post(unlock_handler))
+        .route("/api/lock/status", get(lock_status_handler))
         .route("/api/status", get(status_handler))
         .route("/api/health", get(health_handler))
         .route("/", get(mobile_index_handler))
@@ -471,6 +634,31 @@ fn click_mouse_button(state: &AppState, button_name: &str) -> Result<(), String>
     enigo
         .button(button, Direction::Click)
         .map_err(|e| format!("鼠标点击失败: {e}"))
+}
+
+fn scroll_mouse(state: &AppState, dx: i32, dy: i32) -> Result<(), String> {
+    if dx == 0 && dy == 0 {
+        return Ok(());
+    }
+
+    let mut enigo = state
+        .enigo
+        .lock()
+        .map_err(|_| "鼠标控制器忙，请稍后重试".to_string())?;
+
+    // enigo: Vertical 正数向下滚，负数向上滚；Horizontal 正数向右，负数向左
+    if dy != 0 {
+        enigo
+            .scroll(dy, Axis::Vertical)
+            .map_err(|e| format!("鼠标滚轮失败: {e}"))?;
+    }
+    if dx != 0 {
+        enigo
+            .scroll(dx, Axis::Horizontal)
+            .map_err(|e| format!("鼠标滚轮失败: {e}"))?;
+    }
+
+    Ok(())
 }
 
 fn parse_modifier(name: &str) -> Result<Key, String> {
@@ -739,11 +927,37 @@ async fn mouse_click_handler(
     }
 }
 
-async fn key_handler(Json(body): Json<KeyRequest>) -> impl IntoResponse {
+async fn mouse_scroll_handler(
+    State(state): State<AppState>,
+    Json(body): Json<MouseScrollRequest>,
+) -> impl IntoResponse {
+    match scroll_mouse(&state, body.dx, body.dy) {
+        Ok(()) => (
+            StatusCode::OK,
+            Json(SyncResponse {
+                ok: true,
+                message: "ok".into(),
+            }),
+        ),
+        Err(message) => (
+            StatusCode::BAD_REQUEST,
+            Json(SyncResponse { ok: false, message }),
+        ),
+    }
+}
+
+async fn key_handler(
+    State(state): State<AppState>,
+    Json(body): Json<KeyRequest>,
+) -> impl IntoResponse {
     let key_spec = body.key.trim().to_string();
-    let result = tokio::task::spawn_blocking(move || run_key_sequence(&key_spec))
-        .await
-        .unwrap_or_else(|e| Err(format!("按键任务失败: {e}")));
+    let state_for_task = state.clone();
+    let result = tokio::task::spawn_blocking(move || {
+        prepare_input_target(&state_for_task)?;
+        run_key_sequence(&key_spec)
+    })
+    .await
+    .unwrap_or_else(|e| Err(format!("按键任务失败: {e}")));
 
     match result {
         Ok(()) => {
@@ -771,19 +985,27 @@ async fn sync_handler(
     Json(body): Json<SyncRequest>,
 ) -> impl IntoResponse {
     let text = body.text;
+    let char_count = text.chars().count();
+    let text_for_last = text.clone();
+    let state_for_task = state.clone();
 
-    match paste_into_focused_input(&text) {
+    let result = tokio::task::spawn_blocking(move || {
+        prepare_input_target(&state_for_task)?;
+        paste_into_focused_input(&text)
+    })
+    .await
+    .unwrap_or_else(|e| Err(format!("同步任务失败: {e}")));
+
+    match result {
         Ok(()) => {
             if let Ok(mut last) = state.last_text.lock() {
-                *last = text.clone();
+                *last = text_for_last;
             }
-            info!("已同步 {} 个字符到当前焦点", text.chars().count());
+            let message = locked_window_message(&state);
+            info!("已同步 {} 个字符", char_count);
             (
                 StatusCode::OK,
-                Json(SyncResponse {
-                    ok: true,
-                    message: "已发送到电脑当前输入框".into(),
-                }),
+                Json(SyncResponse { ok: true, message }),
             )
         }
         Err(message) => {
@@ -794,6 +1016,77 @@ async fn sync_handler(
             )
         }
     }
+}
+
+async fn lock_handler(State(state): State<AppState>) -> impl IntoResponse {
+    match win_focus::capture_foreground_window() {
+        Some((hwnd, title)) => {
+            if let Ok(mut locked) = state.locked_window.lock() {
+                *locked = Some(LockedWindow { hwnd, title: title.clone() });
+            }
+            info!("已锁定窗口: {title}");
+            (
+                StatusCode::OK,
+                Json(LockResponse {
+                    ok: true,
+                    locked: true,
+                    title,
+                    message: "已锁定当前电脑窗口，之后发送会自动输入到该窗口".into(),
+                }),
+            )
+        }
+        None => (
+            StatusCode::BAD_REQUEST,
+            Json(LockResponse {
+                ok: false,
+                locked: false,
+                title: String::new(),
+                message: "无法获取当前窗口，请先在电脑上点击目标窗口".into(),
+            }),
+        ),
+    }
+}
+
+async fn unlock_handler(State(state): State<AppState>) -> impl IntoResponse {
+    if let Ok(mut locked) = state.locked_window.lock() {
+        *locked = None;
+    }
+    info!("已取消窗口锁定");
+    (
+        StatusCode::OK,
+        Json(LockResponse {
+            ok: true,
+            locked: false,
+            title: String::new(),
+            message: "已取消锁定，将发送到电脑当前焦点".into(),
+        }),
+    )
+}
+
+async fn lock_status_handler(State(state): State<AppState>) -> impl IntoResponse {
+    let mut locked = false;
+    let mut title = String::new();
+    let mut message = "未锁定窗口".to_string();
+
+    if let Ok(mut guard) = state.locked_window.lock() {
+        if let Some(win) = guard.as_ref() {
+            if win_focus::is_window_valid(win.hwnd) {
+                locked = true;
+                title = win.title.clone();
+                message = format!("已锁定「{title}」");
+            } else {
+                *guard = None;
+                message = "锁定的窗口已关闭，请重新锁定".into();
+            }
+        }
+    }
+
+    Json(LockResponse {
+        ok: true,
+        locked,
+        title,
+        message,
+    })
 }
 
 const WHISPER_BIN_URLS: &[&str] = &[
@@ -1239,6 +1532,7 @@ async fn main() {
     let state = AppState {
         last_text: Arc::new(Mutex::new(String::new())),
         enigo: Arc::new(Mutex::new(enigo)),
+        locked_window: Arc::new(Mutex::new(None)),
     };
 
     let http_app = build_app(state.clone());
@@ -1260,7 +1554,8 @@ async fn main() {
     }
     info!("  手机与电脑须在同一 WiFi（不要用访客网络）");
     info!("  首次用 HTTPS 需在浏览器中信任证书（语音输入、陀螺仪鼠标需 HTTPS）");
-    info!("  先在电脑上点好要输入的框，再点手机发送");
+    info!("  先在电脑上点好要输入的框，手机可点「锁定电脑窗口」固定目标");
+    info!("  未锁定时仍发送到电脑当前焦点；锁定后发送会自动切回该窗口");
     info!("  请勿关闭此窗口，关闭后手机将无法连接");
     info!("========================================");
 

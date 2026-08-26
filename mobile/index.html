@@ -101,7 +101,8 @@
     }
 
     .page-copy.is-hidden,
-    .server.is-hidden {
+    .server.is-hidden,
+    .is-hidden {
       display: none;
     }
 
@@ -181,6 +182,35 @@
       font-size: 0.94rem;
       color: #374151;
       line-height: 1.4;
+    }
+
+    .settings-inline-input {
+      display: inline-block;
+      width: 3.2em;
+      min-width: 2.4em;
+      max-width: 5.5em;
+      margin: 0 1px;
+      padding: 1px 4px;
+      border: 1px solid #d1d5db;
+      border-radius: 5px;
+      background: #f9fafb;
+      color: #111827;
+      font-size: 0.86rem;
+      line-height: 1.3;
+      text-align: center;
+      vertical-align: baseline;
+    }
+
+    .settings-inline-input:focus {
+      outline: none;
+      border-color: #9ca3af;
+      background: #ffffff;
+    }
+
+    .settings-inline-input-seconds {
+      width: 2.4em;
+      min-width: 2em;
+      max-width: 3.2em;
     }
 
     .settings-switch {
@@ -419,6 +449,67 @@
     }
 
     .shortcut-chip:active {
+      background: #f3f4f6;
+    }
+
+    .lock-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      background: #f9fafb;
+    }
+
+    .lock-bar.is-locked {
+      border-color: #a7f3d0;
+      background: #ecfdf5;
+    }
+
+    .lock-btn {
+      flex: 1;
+      min-height: 36px;
+      border-radius: 8px;
+      color: #374151;
+      background: #ffffff;
+      border: 1px solid #e5e7eb;
+      font-size: 0.88rem;
+      font-weight: 500;
+    }
+
+    .lock-btn:active {
+      background: #f3f4f6;
+    }
+
+    .lock-btn:disabled {
+      opacity: 0.6;
+    }
+
+    .lock-label {
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #059669;
+      font-size: 0.88rem;
+      font-weight: 500;
+    }
+
+    .lock-unlock {
+      flex-shrink: 0;
+      min-height: 32px;
+      padding: 0 12px;
+      border-radius: 8px;
+      color: #6b7280;
+      background: transparent;
+      border: 1px solid #d1d5db;
+      font-size: 0.84rem;
+      font-weight: 500;
+    }
+
+    .lock-unlock:active {
       background: #f3f4f6;
     }
 
@@ -800,6 +891,17 @@
         color: #e8eaed;
       }
 
+      .settings-inline-input {
+        border-color: #4b5563;
+        background: #2a2b2d;
+        color: #e8eaed;
+      }
+
+      .settings-inline-input:focus {
+        border-color: #9ca3af;
+        background: #1f1f20;
+      }
+
       .settings-switch {
         background: #4b5563;
       }
@@ -869,6 +971,39 @@
         background: #3a3a3c;
       }
 
+      .lock-bar {
+        border-color: #303236;
+        background: #1f1f20;
+      }
+
+      .lock-bar.is-locked {
+        border-color: #065f46;
+        background: #052e16;
+      }
+
+      .lock-btn {
+        color: #e8eaed;
+        background: #2c2c2e;
+        border-color: #303236;
+      }
+
+      .lock-btn:active {
+        background: #303236;
+      }
+
+      .lock-label {
+        color: #6ee7b7;
+      }
+
+      .lock-unlock {
+        color: #a3a7ad;
+        border-color: #4b5563;
+      }
+
+      .lock-unlock:active {
+        background: #303236;
+      }
+
       .gyro-title {
         color: #e8eaed;
       }
@@ -900,7 +1035,7 @@
     <div class="page-inner">
       <div id="pageCopy" class="page-copy">
         <h1>手机输入同步</h1>
-        <p class="hint">先在电脑上点击要输入的文本框，再在这里输入文字并发送。可在设置中开启语音输入。</p>
+        <p class="hint">先在电脑上点击要输入的对话框，再点「锁定电脑窗口」；之后发送会自动输入到该窗口。未锁定时仍发送到电脑当前焦点。</p>
       </div>
 
       <div class="composer-stack">
@@ -941,6 +1076,12 @@
 
         <div id="shortcutBar" class="shortcut-bar" aria-label="快捷键"></div>
 
+        <div id="lockBar" class="lock-bar" aria-live="polite">
+          <button id="lockBtn" class="lock-btn" type="button">锁定电脑窗口</button>
+          <span id="lockLabel" class="lock-label is-hidden"></span>
+          <button id="unlockBtn" class="lock-unlock is-hidden" type="button">取消锁定</button>
+        </div>
+
         <div id="serverInfo" class="server"></div>
       </div>
 
@@ -956,7 +1097,7 @@
       <div id="gyroPad" class="gyro-pad" role="application" aria-label="触控板">
         <div class="gyro-crosshair" aria-hidden="true"></div>
         <div id="gyroDot" class="gyro-dot" aria-hidden="true"></div>
-        <div id="gyroHint" class="gyro-hint">拖动圆点移动光标，轻触圆点左键单击</div>
+        <div id="gyroHint" class="gyro-hint">单指拖动移动光标，双指上下滑动滚动，轻触左键单击</div>
       </div>
 
       <div class="gyro-controls">
@@ -980,6 +1121,13 @@
 
       <button id="openGeneralBtn" class="settings-nav" type="button">
         <span>通用设置</span>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="m9 18 6-6-6-6"></path>
+        </svg>
+      </button>
+
+      <button id="openVoiceBtn" class="settings-nav" type="button">
+        <span>语音设置</span>
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <path d="m9 18 6-6-6-6"></path>
         </svg>
@@ -1045,6 +1193,52 @@
       </div>
 
       <div class="settings-option">
+        <span class="settings-option-label">
+          末尾「<input
+            id="submitKeywordInput"
+            class="settings-inline-input"
+            type="text"
+            value="提交"
+            maxlength="12"
+            autocomplete="off"
+            aria-label="自动发送关键词"
+          >」自动发送
+        </span>
+        <button
+          id="toggleAutoSendSubmit"
+          class="settings-switch"
+          type="button"
+          role="switch"
+          aria-checked="false"
+          aria-label="末尾关键词自动发送"
+        ></button>
+      </div>
+
+      <div class="settings-option">
+        <span class="settings-option-label">
+          暂停 <input
+            id="pauseAutoSendSecondsInput"
+            class="settings-inline-input settings-inline-input-seconds"
+            type="text"
+            inputmode="numeric"
+            pattern="[0-9]*"
+            value="3"
+            maxlength="3"
+            autocomplete="off"
+            aria-label="暂停自动发送秒数"
+          > 秒自动发送
+        </span>
+        <button
+          id="toggleAutoSendPause"
+          class="settings-switch"
+          type="button"
+          role="switch"
+          aria-checked="false"
+          aria-label="暂停自动发送"
+        ></button>
+      </div>
+
+      <div class="settings-option">
         <span class="settings-option-label">流式传递</span>
         <button
           id="toggleStream"
@@ -1055,18 +1249,49 @@
           aria-label="流式传递"
         ></button>
       </div>
+    </div>
+  </div>
+
+  <div id="voiceModal" class="settings-modal" aria-hidden="true">
+    <div id="voiceBackdrop" class="settings-backdrop"></div>
+    <div class="settings-panel" role="dialog" aria-modal="true" aria-labelledby="voiceTitle">
+      <div class="shortcuts-panel-head">
+        <button id="voiceBack" class="shortcuts-back" type="button" aria-label="返回">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="m15 18-6-6 6-6"></path>
+          </svg>
+        </button>
+        <h2 id="voiceTitle">语音设置</h2>
+      </div>
 
       <div class="settings-option">
-        <span class="settings-option-label">语音输入</span>
+        <span class="settings-option-label">开启语音输入</span>
         <button
           id="toggleVoice"
           class="settings-switch"
           type="button"
           role="switch"
           aria-checked="false"
-          aria-label="语音输入"
+          aria-label="开启语音输入"
         ></button>
       </div>
+
+      <div class="settings-option">
+        <span class="settings-option-label">常驻模式</span>
+        <button
+          id="toggleAlwaysOn"
+          class="settings-switch"
+          type="button"
+          role="switch"
+          aria-checked="false"
+          aria-label="常驻模式"
+        ></button>
+      </div>
+
+      <div class="shortcut-form" style="margin-top: 8px;">
+        <input id="voiceKeywordInput" type="text" placeholder="唤醒关键词，例如：你好" autocomplete="off">
+      </div>
+      <p class="shortcut-form-hint">常驻模式平时几乎不占电脑性能：只有你开口说话并停顿后才会识别一次。未听到关键词时不保留内容；听到关键词后，只把后面的话填入输入框。例如关键词「你好」，说「你好，帮我整理项目」后稍停，会得到「帮我整理项目」。</p>
     </div>
   </div>
 
@@ -1112,13 +1337,23 @@
     const toggleHeader = document.getElementById('toggleHeader');
     const toggleServer = document.getElementById('toggleServer');
     const toggleSendEnter = document.getElementById('toggleSendEnter');
+    const toggleAutoSendSubmit = document.getElementById('toggleAutoSendSubmit');
+    const submitKeywordInput = document.getElementById('submitKeywordInput');
+    const toggleAutoSendPause = document.getElementById('toggleAutoSendPause');
+    const pauseAutoSendSecondsInput = document.getElementById('pauseAutoSendSecondsInput');
     const toggleStream = document.getElementById('toggleStream');
     const toggleVoice = document.getElementById('toggleVoice');
+    const toggleAlwaysOn = document.getElementById('toggleAlwaysOn');
+    const voiceKeywordInput = document.getElementById('voiceKeywordInput');
     const sendIcon = document.getElementById('sendIcon');
     const openGeneralBtn = document.getElementById('openGeneralBtn');
     const generalModal = document.getElementById('generalModal');
     const generalBackdrop = document.getElementById('generalBackdrop');
     const generalBack = document.getElementById('generalBack');
+    const openVoiceBtn = document.getElementById('openVoiceBtn');
+    const voiceModal = document.getElementById('voiceModal');
+    const voiceBackdrop = document.getElementById('voiceBackdrop');
+    const voiceBack = document.getElementById('voiceBack');
     const openShortcutsBtn = document.getElementById('openShortcutsBtn');
     const shortcutsModal = document.getElementById('shortcutsModal');
     const shortcutsBackdrop = document.getElementById('shortcutsBackdrop');
@@ -1129,6 +1364,16 @@
     const shortcutKeyInput = document.getElementById('shortcutKeyInput');
     const shortcutAddBtn = document.getElementById('shortcutAddBtn');
     const shortcutFormStatus = document.getElementById('shortcutFormStatus');
+    const lockBar = document.getElementById('lockBar');
+    const lockBtn = document.getElementById('lockBtn');
+    const lockLabel = document.getElementById('lockLabel');
+    const unlockBtn = document.getElementById('unlockBtn');
+
+    const lockState = {
+      locked: false,
+      title: '',
+      busy: false,
+    };
 
     const SETTINGS_KEY = 'phone-input-sync.ui';
     const SHORTCUTS_KEY = 'phone-input-sync.shortcuts';
@@ -1136,9 +1381,18 @@
       showHeader: true,
       showServer: true,
       sendEnterAfterSync: false,
+      autoSendOnSubmitKeyword: false,
+      submitKeyword: '提交',
+      autoSendAfterPause: false,
+      pauseAutoSendSeconds: 3,
       streamMode: false,
       voiceEnabled: false,
+      voiceAlwaysOn: false,
+      voiceKeyword: '你好',
     };
+    const DEFAULT_SUBMIT_KEYWORD = '提交';
+    const DEFAULT_PAUSE_AUTO_SEND_SECONDS = 3;
+    const SUBMIT_AUTO_SEND_MS = 3000;
 
     const SEND_ICON_PATHS = '<path d="m5 12 7-7 7 7"></path><path d="M12 19V5"></path>';
     const ENTER_ICON_PATHS = '<path d="M9 10 4 15l5 5"></path><path d="M20 4v7a4 4 0 0 1-4 4H4"></path>';
@@ -1157,6 +1411,89 @@
       statusEl.className = 'status ' + (ok ? 'ok' : 'err');
     }
 
+    function renderLockBar() {
+      lockBar.classList.toggle('is-locked', lockState.locked);
+      lockBtn.classList.toggle('is-hidden', lockState.locked);
+      lockLabel.classList.toggle('is-hidden', !lockState.locked);
+      unlockBtn.classList.toggle('is-hidden', !lockState.locked);
+      lockBtn.disabled = lockState.busy;
+      unlockBtn.disabled = lockState.busy;
+
+      if (lockState.locked) {
+        const title = lockState.title || '未知窗口';
+        lockLabel.textContent = '已锁定: ' + title;
+        lockBtn.setAttribute('aria-hidden', 'true');
+        lockLabel.setAttribute('aria-hidden', 'false');
+        unlockBtn.setAttribute('aria-hidden', 'false');
+      } else {
+        lockLabel.textContent = '';
+        lockBtn.setAttribute('aria-hidden', 'false');
+        lockLabel.setAttribute('aria-hidden', 'true');
+        unlockBtn.setAttribute('aria-hidden', 'true');
+      }
+    }
+
+    async function refreshLockStatus(showMessage) {
+      try {
+        const res = await fetch('/api/lock/status');
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          return;
+        }
+        lockState.locked = data.locked === true;
+        lockState.title = typeof data.title === 'string' ? data.title : '';
+        renderLockBar();
+        if (showMessage && data.message) {
+          setStatus(data.message, data.locked || !data.message.includes('关闭'));
+        }
+      } catch {
+        // 忽略网络错误，避免打断主流程
+      }
+    }
+
+    async function lockTargetWindow() {
+      if (lockState.busy) {
+        return;
+      }
+      lockState.busy = true;
+      renderLockBar();
+      setStatus('正在锁定电脑窗口…', true);
+      try {
+        const res = await fetch('/api/lock', { method: 'POST' });
+        const data = await res.json();
+        lockState.locked = data.locked === true;
+        lockState.title = typeof data.title === 'string' ? data.title : '';
+        renderLockBar();
+        setStatus(data.message || (res.ok ? '已锁定' : '锁定失败'), res.ok && data.ok);
+      } catch {
+        setStatus('网络错误，请确认手机和电脑在同一 WiFi', false);
+      } finally {
+        lockState.busy = false;
+        renderLockBar();
+      }
+    }
+
+    async function unlockTargetWindow() {
+      if (lockState.busy) {
+        return;
+      }
+      lockState.busy = true;
+      renderLockBar();
+      try {
+        const res = await fetch('/api/unlock', { method: 'POST' });
+        const data = await res.json();
+        lockState.locked = false;
+        lockState.title = '';
+        renderLockBar();
+        setStatus(data.message || (res.ok ? '已取消锁定' : '取消失败'), res.ok && data.ok);
+      } catch {
+        setStatus('网络错误，请确认手机和电脑在同一 WiFi', false);
+      } finally {
+        lockState.busy = false;
+        renderLockBar();
+      }
+    }
+
     function setShortcutFormStatus(text, ok) {
       shortcutFormStatus.textContent = text;
       shortcutFormStatus.className = 'shortcut-form-status' + (text ? (ok ? ' ok' : ' err') : '');
@@ -1169,13 +1506,30 @@
           return { ...defaultSettings };
         }
         const parsed = JSON.parse(raw);
+        const autoSendOnSubmitKeyword = parsed.autoSendOnSubmitKeyword === true;
+        // 与「暂停自动发送」互斥：若历史数据两边都开，只保留末尾关键词
+        const autoSendAfterPause = parsed.autoSendAfterPause === true && !autoSendOnSubmitKeyword;
+        const pauseSecondsRaw = Number(parsed.pauseAutoSendSeconds);
+        const pauseAutoSendSeconds = Number.isInteger(pauseSecondsRaw) && pauseSecondsRaw > 0
+          ? pauseSecondsRaw
+          : DEFAULT_PAUSE_AUTO_SEND_SECONDS;
         return {
           showHeader: parsed.showHeader !== false,
           showServer: parsed.showServer !== false,
           sendEnterAfterSync: parsed.sendEnterAfterSync === true,
+          autoSendOnSubmitKeyword,
+          submitKeyword: typeof parsed.submitKeyword === 'string' && parsed.submitKeyword.trim()
+            ? parsed.submitKeyword.trim()
+            : '提交',
+          autoSendAfterPause,
+          pauseAutoSendSeconds,
           // 流式是一次性会话，刷新后不自动恢复，避免与电脑端不同步
           streamMode: false,
           voiceEnabled: parsed.voiceEnabled === true,
+          voiceAlwaysOn: parsed.voiceAlwaysOn === true,
+          voiceKeyword: typeof parsed.voiceKeyword === 'string' && parsed.voiceKeyword.trim()
+            ? parsed.voiceKeyword.trim()
+            : '你好',
         };
       } catch {
         return { ...defaultSettings };
@@ -1192,10 +1546,130 @@
     let streamQueued = false;
     let isComposing = false;
     let streamTimer = 0;
+    let submitAutoSendTimer = 0;
+    let pauseAutoSendTimer = 0;
 
     function syncSwitch(button, enabled) {
       button.classList.toggle('is-on', enabled);
       button.setAttribute('aria-checked', enabled ? 'true' : 'false');
+    }
+
+    function cancelSubmitAutoSend() {
+      if (submitAutoSendTimer) {
+        window.clearTimeout(submitAutoSendTimer);
+        submitAutoSendTimer = 0;
+      }
+    }
+
+    function cancelPauseAutoSend() {
+      if (pauseAutoSendTimer) {
+        window.clearTimeout(pauseAutoSendTimer);
+        pauseAutoSendTimer = 0;
+      }
+    }
+
+    function cancelAllAutoSendTimers() {
+      cancelSubmitAutoSend();
+      cancelPauseAutoSend();
+    }
+
+    function getSubmitKeyword() {
+      const keyword = String(uiSettings.submitKeyword || '').trim();
+      return keyword || DEFAULT_SUBMIT_KEYWORD;
+    }
+
+    function getPauseAutoSendSeconds() {
+      const seconds = Number(uiSettings.pauseAutoSendSeconds);
+      if (Number.isInteger(seconds) && seconds > 0) {
+        return seconds;
+      }
+      return DEFAULT_PAUSE_AUTO_SEND_SECONDS;
+    }
+
+    function getPauseAutoSendMs() {
+      return getPauseAutoSendSeconds() * 1000;
+    }
+
+    function scheduleSubmitAutoSend() {
+      cancelSubmitAutoSend();
+      if (!uiSettings.autoSendOnSubmitKeyword || uiSettings.streamMode || isComposing) {
+        return;
+      }
+
+      const keyword = getSubmitKeyword();
+      const text = input.value;
+      if (!keyword || !text.endsWith(keyword)) {
+        return;
+      }
+
+      const content = text.slice(0, -keyword.length);
+      if (!content.trim()) {
+        return;
+      }
+
+      // 与「暂停自动发送」同时开启时，由末尾关键词优先处理
+      cancelPauseAutoSend();
+      setStatus('检测到「' + keyword + '」，3 秒后自动发送…', true);
+      submitAutoSendTimer = window.setTimeout(() => {
+        submitAutoSendTimer = 0;
+        if (!uiSettings.autoSendOnSubmitKeyword || uiSettings.streamMode || isComposing) {
+          return;
+        }
+        const currentKeyword = getSubmitKeyword();
+        const current = input.value;
+        if (!currentKeyword || !current.endsWith(currentKeyword)) {
+          return;
+        }
+        const payload = current.slice(0, -currentKeyword.length);
+        if (!payload.trim()) {
+          return;
+        }
+        input.value = payload;
+        syncComposerState();
+        sendText();
+      }, SUBMIT_AUTO_SEND_MS);
+    }
+
+    function schedulePauseAutoSend() {
+      cancelPauseAutoSend();
+      if (!uiSettings.autoSendAfterPause || isComposing) {
+        return;
+      }
+      if (!input.value.trim()) {
+        return;
+      }
+      // 末尾是自定义关键词且关键词自动发送已开时，交给关键词逻辑
+      const keyword = getSubmitKeyword();
+      if (
+        uiSettings.autoSendOnSubmitKeyword
+        && !uiSettings.streamMode
+        && keyword
+        && input.value.endsWith(keyword)
+      ) {
+        return;
+      }
+
+      const seconds = getPauseAutoSendSeconds();
+      setStatus('暂停输入中，' + seconds + ' 秒后自动发送…', true);
+      pauseAutoSendTimer = window.setTimeout(() => {
+        pauseAutoSendTimer = 0;
+        if (!uiSettings.autoSendAfterPause || isComposing) {
+          return;
+        }
+        if (!input.value.trim()) {
+          return;
+        }
+        if (uiSettings.streamMode) {
+          finishStreamWithEnter();
+        } else {
+          sendText();
+        }
+      }, getPauseAutoSendMs());
+    }
+
+    function scheduleAutoSendAfterInput() {
+      scheduleSubmitAutoSend();
+      schedulePauseAutoSend();
     }
 
     function updateSendButtonAppearance() {
@@ -1214,11 +1688,39 @@
       syncSwitch(toggleHeader, uiSettings.showHeader);
       syncSwitch(toggleServer, uiSettings.showServer);
       syncSwitch(toggleSendEnter, uiSettings.sendEnterAfterSync);
+      syncSwitch(toggleAutoSendSubmit, uiSettings.autoSendOnSubmitKeyword);
+      syncSwitch(toggleAutoSendPause, uiSettings.autoSendAfterPause);
       syncSwitch(toggleStream, uiSettings.streamMode);
       syncSwitch(toggleVoice, uiSettings.voiceEnabled);
+      syncSwitch(toggleAlwaysOn, uiSettings.voiceAlwaysOn);
+      if (document.activeElement !== submitKeywordInput) {
+        submitKeywordInput.value = getSubmitKeyword();
+      }
+      if (document.activeElement !== pauseAutoSendSecondsInput) {
+        pauseAutoSendSecondsInput.value = String(getPauseAutoSendSeconds());
+      }
+      if (document.activeElement !== voiceKeywordInput) {
+        voiceKeywordInput.value = uiSettings.voiceKeyword || '';
+      }
+      toggleAutoSendSubmit.setAttribute(
+        'aria-label',
+        '末尾「' + getSubmitKeyword() + '」自动发送'
+      );
+      toggleAutoSendPause.setAttribute(
+        'aria-label',
+        '暂停 ' + getPauseAutoSendSeconds() + ' 秒自动发送'
+      );
       // 流式会话自带收尾 Enter，期间不允许改「发送后自动按 Enter」
       toggleSendEnter.disabled = uiSettings.streamMode;
       toggleSendEnter.classList.toggle('is-locked', uiSettings.streamMode);
+      toggleAutoSendSubmit.disabled = uiSettings.streamMode;
+      toggleAutoSendSubmit.classList.toggle('is-locked', uiSettings.streamMode);
+      if (uiSettings.streamMode || !uiSettings.autoSendOnSubmitKeyword) {
+        cancelSubmitAutoSend();
+      }
+      if (!uiSettings.autoSendAfterPause) {
+        cancelPauseAutoSend();
+      }
       composerShell.classList.toggle('has-mic', uiSettings.voiceEnabled);
       micSlot.classList.toggle('is-hidden', !uiSettings.voiceEnabled);
       micSlot.setAttribute('aria-hidden', uiSettings.voiceEnabled ? 'false' : 'true');
@@ -1245,6 +1747,20 @@
     function closeGeneralPanel(returnToSettings) {
       generalModal.classList.remove('is-open');
       generalModal.setAttribute('aria-hidden', 'true');
+      if (returnToSettings) {
+        openSettings();
+      }
+    }
+
+    function openVoicePanel() {
+      closeSettings();
+      voiceModal.classList.add('is-open');
+      voiceModal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeVoicePanel(returnToSettings) {
+      voiceModal.classList.remove('is-open');
+      voiceModal.setAttribute('aria-hidden', 'true');
       if (returnToSettings) {
         openSettings();
       }
@@ -1418,6 +1934,9 @@
     openGeneralBtn.addEventListener('click', openGeneralPanel);
     generalBackdrop.addEventListener('click', () => closeGeneralPanel(false));
     generalBack.addEventListener('click', () => closeGeneralPanel(true));
+    openVoiceBtn.addEventListener('click', openVoicePanel);
+    voiceBackdrop.addEventListener('click', () => closeVoicePanel(false));
+    voiceBack.addEventListener('click', () => closeVoicePanel(true));
     openShortcutsBtn.addEventListener('click', openShortcutsPanel);
     shortcutsBackdrop.addEventListener('click', () => closeShortcutsPanel(false));
     shortcutsBack.addEventListener('click', () => closeShortcutsPanel(true));
@@ -1456,7 +1975,125 @@
       applyUiSettings();
     });
 
+    toggleAutoSendSubmit.addEventListener('click', () => {
+      if (uiSettings.streamMode) {
+        return;
+      }
+      const turningOn = !uiSettings.autoSendOnSubmitKeyword;
+      uiSettings.autoSendOnSubmitKeyword = turningOn;
+      if (turningOn) {
+        uiSettings.autoSendAfterPause = false;
+        cancelPauseAutoSend();
+      }
+      saveSettings(uiSettings);
+      applyUiSettings();
+      if (turningOn) {
+        scheduleSubmitAutoSend();
+      } else {
+        cancelSubmitAutoSend();
+      }
+    });
+
+    function saveSubmitKeywordFromInput() {
+      const keyword = submitKeywordInput.value.trim() || DEFAULT_SUBMIT_KEYWORD;
+      submitKeywordInput.value = keyword;
+      if (uiSettings.submitKeyword === keyword) {
+        return;
+      }
+      uiSettings.submitKeyword = keyword;
+      saveSettings(uiSettings);
+      toggleAutoSendSubmit.setAttribute('aria-label', '末尾「' + keyword + '」自动发送');
+      if (uiSettings.autoSendOnSubmitKeyword) {
+        scheduleSubmitAutoSend();
+      }
+    }
+
+    submitKeywordInput.addEventListener('change', saveSubmitKeywordFromInput);
+    submitKeywordInput.addEventListener('blur', saveSubmitKeywordFromInput);
+    submitKeywordInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        submitKeywordInput.blur();
+      }
+    });
+    // 避免点小输入框时误触开关区域滚动抢焦点以外的问题
+    submitKeywordInput.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
+
+    function normalizePauseAutoSendSeconds(raw) {
+      const digits = String(raw ?? '').replace(/\D/g, '');
+      const parsed = parseInt(digits, 10);
+      if (!Number.isInteger(parsed) || parsed <= 0) {
+        return DEFAULT_PAUSE_AUTO_SEND_SECONDS;
+      }
+      return Math.min(parsed, 999);
+    }
+
+    function savePauseAutoSendSecondsFromInput() {
+      const seconds = normalizePauseAutoSendSeconds(pauseAutoSendSecondsInput.value);
+      pauseAutoSendSecondsInput.value = String(seconds);
+      if (uiSettings.pauseAutoSendSeconds === seconds) {
+        return;
+      }
+      uiSettings.pauseAutoSendSeconds = seconds;
+      saveSettings(uiSettings);
+      toggleAutoSendPause.setAttribute('aria-label', '暂停 ' + seconds + ' 秒自动发送');
+      if (uiSettings.autoSendAfterPause) {
+        schedulePauseAutoSend();
+      }
+    }
+
+    pauseAutoSendSecondsInput.addEventListener('input', () => {
+      const digits = pauseAutoSendSecondsInput.value.replace(/\D/g, '').slice(0, 3);
+      if (pauseAutoSendSecondsInput.value !== digits) {
+        pauseAutoSendSecondsInput.value = digits;
+      }
+    });
+    pauseAutoSendSecondsInput.addEventListener('change', savePauseAutoSendSecondsFromInput);
+    pauseAutoSendSecondsInput.addEventListener('blur', savePauseAutoSendSecondsFromInput);
+    pauseAutoSendSecondsInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        pauseAutoSendSecondsInput.blur();
+      }
+    });
+    pauseAutoSendSecondsInput.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
+
+    toggleAutoSendPause.addEventListener('click', () => {
+      const turningOn = !uiSettings.autoSendAfterPause;
+      uiSettings.autoSendAfterPause = turningOn;
+      if (turningOn) {
+        uiSettings.autoSendOnSubmitKeyword = false;
+        cancelSubmitAutoSend();
+      }
+      saveSettings(uiSettings);
+      applyUiSettings();
+      if (turningOn) {
+        schedulePauseAutoSend();
+      } else {
+        cancelPauseAutoSend();
+      }
+    });
+
     toggleStream.addEventListener('click', () => {
+      if (uiSettings.streamMode) {
+        cancelAllAutoSendTimers();
+        if (streamTimer) {
+          window.clearTimeout(streamTimer);
+          streamTimer = 0;
+        }
+        uiSettings.streamMode = false;
+        lastStreamedText = '';
+        saveSettings(uiSettings);
+        applyUiSettings();
+        setStatus('流式传递已关闭', true);
+        return;
+      }
+
+      cancelSubmitAutoSend();
       uiSettings.streamMode = true;
       uiSettings.sendEnterAfterSync = false;
       lastStreamedText = '';
@@ -1468,6 +2105,7 @@
       if (input.value) {
         scheduleStreamSync();
       }
+      schedulePauseAutoSend();
       activateInput();
     });
 
@@ -1484,6 +2122,9 @@
           saveSettings(uiSettings);
           applyUiSettings();
           setStatus('语音功能已开启（已使用本地模型）', true);
+          if (uiSettings.voiceAlwaysOn) {
+            startAlwaysOnListening();
+          }
           return;
         }
 
@@ -1506,6 +2147,9 @@
           saveSettings(uiSettings);
           applyUiSettings();
           setStatus('语音功能已开启', true);
+          if (uiSettings.voiceAlwaysOn) {
+            startAlwaysOnListening();
+          }
         } else {
           uiSettings.voiceEnabled = false;
           saveSettings(uiSettings);
@@ -1526,11 +2170,13 @@
 
     toggleVoice.addEventListener('click', () => {
       if (uiSettings.voiceEnabled) {
+        stopAlwaysOnListening(false);
         if (isListening) {
           setListeningUi(false);
           cleanupAudioGraph();
         }
         uiSettings.voiceEnabled = false;
+        uiSettings.voiceAlwaysOn = false;
         saveSettings(uiSettings);
         applyUiSettings();
         setStatus('语音功能已关闭', true);
@@ -1539,8 +2185,60 @@
       enableVoiceFeature();
     });
 
+    function saveVoiceKeywordFromInput() {
+      const keyword = voiceKeywordInput.value.trim() || '你好';
+      voiceKeywordInput.value = keyword;
+      uiSettings.voiceKeyword = keyword;
+      saveSettings(uiSettings);
+    }
+
+    voiceKeywordInput.addEventListener('change', saveVoiceKeywordFromInput);
+    voiceKeywordInput.addEventListener('blur', saveVoiceKeywordFromInput);
+
+    toggleAlwaysOn.addEventListener('click', async () => {
+      if (uiSettings.voiceAlwaysOn) {
+        stopAlwaysOnListening(false);
+        uiSettings.voiceAlwaysOn = false;
+        saveSettings(uiSettings);
+        applyUiSettings();
+        setStatus('常驻模式已关闭', true);
+        return;
+      }
+
+      saveVoiceKeywordFromInput();
+      if (!uiSettings.voiceKeyword) {
+        setStatus('请先填写唤醒关键词', false);
+        voiceKeywordInput.focus();
+        syncSwitch(toggleAlwaysOn, false);
+        return;
+      }
+
+      if (!uiSettings.voiceEnabled) {
+        await enableVoiceFeature();
+        if (!uiSettings.voiceEnabled) {
+          syncSwitch(toggleAlwaysOn, false);
+          return;
+        }
+      }
+
+      uiSettings.voiceAlwaysOn = true;
+      saveSettings(uiSettings);
+      applyUiSettings();
+      const started = await startAlwaysOnListening();
+      if (!started) {
+        uiSettings.voiceAlwaysOn = false;
+        saveSettings(uiSettings);
+        applyUiSettings();
+      }
+    });
+
     applyUiSettings();
     renderShortcutBar();
+    renderLockBar();
+    refreshLockStatus(false);
+
+    lockBtn.addEventListener('click', lockTargetWindow);
+    unlockBtn.addEventListener('click', unlockTargetWindow);
 
     function activateInput() {
       if (input.hasAttribute('readonly')) {
@@ -1677,6 +2375,7 @@
     }
 
     async function finishStreamWithEnter() {
+      cancelAllAutoSendTimers();
       if (streamTimer) {
         window.clearTimeout(streamTimer);
         streamTimer = 0;
@@ -1689,25 +2388,18 @@
       setStatus('正在按 Enter…', true);
 
       try {
-        const ok = await sendKey('enter', '已按下 Enter，流式传递已关闭');
+        const ok = await sendKey('enter', '已按下 Enter');
         input.value = '';
         lastStreamedText = '';
         syncComposerState();
         syncTextareaHeight();
 
-        uiSettings.streamMode = false;
-        saveSettings(uiSettings);
-        applyUiSettings();
-
         if (!ok) {
-          setStatus('回车发送失败，流式传递已关闭', false);
+          setStatus('回车发送失败', false);
         }
       } catch {
-        uiSettings.streamMode = false;
         lastStreamedText = '';
-        saveSettings(uiSettings);
-        applyUiSettings();
-        setStatus('网络错误，流式传递已关闭', false);
+        setStatus('网络错误，回车失败', false);
       } finally {
         syncComposerState();
       }
@@ -1717,12 +2409,14 @@
     input.addEventListener('blur', () => composerShell.classList.remove('is-focused'));
     input.addEventListener('compositionstart', () => {
       isComposing = true;
+      cancelAllAutoSendTimers();
     });
     input.addEventListener('compositionend', () => {
       isComposing = false;
       if (uiSettings.streamMode) {
         scheduleStreamSync();
       }
+      scheduleAutoSendAfterInput();
     });
     input.addEventListener('input', () => {
       syncComposerState();
@@ -1731,6 +2425,7 @@
       if (uiSettings.streamMode && !isComposing) {
         scheduleStreamSync();
       }
+      scheduleAutoSendAfterInput();
     });
 
     input.addEventListener('keydown', (e) => {
@@ -1747,6 +2442,7 @@
     });
 
     async function sendText() {
+      cancelAllAutoSendTimers();
       if (uiSettings.streamMode) {
         await finishStreamWithEnter();
         return;
@@ -1801,7 +2497,7 @@
       sendText();
     });
 
-    // —— 语音输入：手机录音 → 电脑 Windows 语音识别转文字 ——
+    // —— 语音输入：手机录音 → 电脑 Whisper 转文字 ——
     let isListening = false;
     let speechBusy = false;
     let mediaStream = null;
@@ -1810,6 +2506,24 @@
     let audioSource = null;
     let recordChunks = [];
     let recordSampleRate = 16000;
+    let alwaysOnActive = false;
+    let alwaysOnBusy = false;
+    let alwaysOnCooldownUntil = 0;
+    let captureMode = 'manual'; // manual | always-on
+    let vadState = 'idle'; // idle | speech
+    let vadSpeechMs = 0;
+    let vadSilenceMs = 0;
+    let utteranceChunks = [];
+    let preRollChunks = [];
+
+    // 静音检测：平时不调用 Whisper；说完停顿后才识别一次
+    const VAD_SPEECH_RMS = 0.02;
+    const VAD_SILENCE_RMS = 0.01;
+    const VAD_MIN_SPEECH_MS = 450;
+    const VAD_END_SILENCE_MS = 850;
+    const VAD_MAX_UTTERANCE_MS = 12000;
+    const VAD_PREROLL_CHUNKS = 8;
+    const ALWAYS_ON_COOLDOWN_MS = 2500;
 
     function isSecureForMic() {
       return window.isSecureContext
@@ -1822,7 +2536,11 @@
       isListening = listening;
       micBtn.classList.toggle('is-listening', listening);
       micBtn.setAttribute('aria-pressed', listening ? 'true' : 'false');
-      micBtn.setAttribute('aria-label', listening ? '结束录音' : '语音输入');
+      if (alwaysOnActive) {
+        micBtn.setAttribute('aria-label', '停止常驻监听');
+      } else {
+        micBtn.setAttribute('aria-label', listening ? '结束录音' : '语音输入');
+      }
     }
 
     function mergeFloat32(chunks) {
@@ -1890,6 +2608,23 @@
       return buffer;
     }
 
+    function calcRms(buffer) {
+      let sum = 0;
+      for (let i = 0; i < buffer.length; i += 1) {
+        const v = buffer[i];
+        sum += v * v;
+      }
+      return Math.sqrt(sum / Math.max(1, buffer.length));
+    }
+
+    function resetVad() {
+      vadState = 'idle';
+      vadSpeechMs = 0;
+      vadSilenceMs = 0;
+      utteranceChunks = [];
+      preRollChunks = [];
+    }
+
     function cleanupAudioGraph() {
       if (audioProcessor) {
         try {
@@ -1918,16 +2653,149 @@
         mediaStream = null;
       }
       recordChunks = [];
+      resetVad();
     }
 
-    async function startRecording() {
+    function escapeRegExp(text) {
+      return String(text).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    function extractAfterKeyword(transcript, keyword) {
+      const raw = String(transcript || '').trim();
+      const key = String(keyword || '').trim();
+      if (!raw || !key) {
+        return '';
+      }
+
+      let idx = raw.indexOf(key);
+      let keyLen = key.length;
+      if (idx < 0) {
+        const flexible = escapeRegExp(key).split('').join('[\\s，,。.!！？?、]*');
+        const matched = raw.match(new RegExp(flexible));
+        if (!matched) {
+          return '';
+        }
+        idx = matched.index;
+        keyLen = matched[0].length;
+      }
+
+      return raw.slice(idx + keyLen).replace(/^[，,。.!！？?、\s]+/, '').trim();
+    }
+
+    function applyCapturedSpeech(text) {
+      input.value = text;
+      syncComposerState();
+      input.style.height = 'auto';
+      input.style.height = Math.min(input.scrollHeight, 200) + 'px';
+      if (uiSettings.streamMode && !isComposing) {
+        scheduleStreamSync();
+      }
+      scheduleAutoSendAfterInput();
+      activateInput();
+    }
+
+    async function finalizeAlwaysOnUtterance(chunks, sampleRate) {
+      if (alwaysOnBusy || !alwaysOnActive) {
+        return;
+      }
+      alwaysOnBusy = true;
+      setStatus('听到说话，正在识别…', true);
+      try {
+        const merged = mergeFloat32(chunks);
+        const pcm16k = downsampleBuffer(merged, sampleRate, 16000);
+        if (pcm16k.length < 3200) {
+          setStatus('常驻待命中…说完后稍停一下', true);
+          return;
+        }
+
+        const result = await transcribePcm16k(pcm16k);
+        if (!alwaysOnActive) {
+          return;
+        }
+        if (!result.ok) {
+          setStatus('常驻待命中…（这次没听清，请再说）', true);
+          return;
+        }
+
+        const keyword = uiSettings.voiceKeyword || '你好';
+        const after = extractAfterKeyword(result.text, keyword);
+        if (!after) {
+          // 无关键词：整段丢弃，不写入输入框
+          setStatus('常驻待命中…未听到「' + keyword + '」，已忽略', true);
+          return;
+        }
+
+        applyCapturedSpeech(after);
+        alwaysOnCooldownUntil = Date.now() + ALWAYS_ON_COOLDOWN_MS;
+        setStatus('已捕获：' + after, true);
+      } catch {
+        if (alwaysOnActive) {
+          setStatus('常驻待命中…（网络异常）', true);
+        }
+      } finally {
+        alwaysOnBusy = false;
+        resetVad();
+      }
+    }
+
+    function handleAlwaysOnFrame(data, frameMs) {
+      if (!alwaysOnActive || alwaysOnBusy || Date.now() < alwaysOnCooldownUntil) {
+        return;
+      }
+
+      const rms = calcRms(data);
+      const isSpeech = rms >= VAD_SPEECH_RMS;
+      const isSilence = rms <= VAD_SILENCE_RMS;
+
+      if (vadState === 'idle') {
+        preRollChunks.push(data);
+        while (preRollChunks.length > VAD_PREROLL_CHUNKS) {
+          preRollChunks.shift();
+        }
+        if (isSpeech) {
+          vadState = 'speech';
+          vadSpeechMs = frameMs;
+          vadSilenceMs = 0;
+          utteranceChunks = preRollChunks.slice();
+          utteranceChunks.push(data);
+          preRollChunks = [];
+          setStatus('听到声音…说完请停顿', true);
+        }
+        return;
+      }
+
+      // speech
+      utteranceChunks.push(data);
+      if (isSpeech) {
+        vadSpeechMs += frameMs;
+        vadSilenceMs = 0;
+      } else if (isSilence) {
+        vadSilenceMs += frameMs;
+      } else {
+        // 中间地带：算作轻微延续，不立刻结束
+        vadSilenceMs = Math.max(0, vadSilenceMs - frameMs * 0.5);
+      }
+
+      const shouldCut =
+        (vadSpeechMs >= VAD_MIN_SPEECH_MS && vadSilenceMs >= VAD_END_SILENCE_MS)
+        || vadSpeechMs >= VAD_MAX_UTTERANCE_MS;
+
+      if (shouldCut) {
+        const chunks = utteranceChunks.slice();
+        const sampleRate = recordSampleRate;
+        resetVad();
+        finalizeAlwaysOnUtterance(chunks, sampleRate);
+      }
+    }
+
+    async function openMicGraph(mode) {
       if (!navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
         setStatus('当前浏览器不支持录音', false);
-        return;
+        return false;
       }
       if (!isSecureForMic()) {
         setStatus('语音需要 HTTPS，请打开：https://' + location.hostname + ':8766', false);
-        return;
+        return false;
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -1952,12 +2820,16 @@
         if (!isListening) {
           return;
         }
-        const input = event.inputBuffer.getChannelData(0);
-        chunks.push(new Float32Array(input));
+        const data = new Float32Array(event.inputBuffer.getChannelData(0));
+        if (captureMode === 'always-on') {
+          const frameMs = (data.length / (recordSampleRate || ctx.sampleRate || 48000)) * 1000;
+          handleAlwaysOnFrame(data, frameMs);
+        } else {
+          chunks.push(data);
+        }
       };
 
       source.connect(processor);
-      // ScriptProcessor 必须连到 destination 才会回调；增益设为 0 避免外放回授
       const mute = ctx.createGain();
       mute.gain.value = 0;
       processor.connect(mute);
@@ -1969,18 +2841,45 @@
       audioProcessor = processor;
       recordChunks = chunks;
       recordSampleRate = ctx.sampleRate || 48000;
-
+      captureMode = mode;
+      resetVad();
       setListeningUi(true);
-      setStatus('录音中…说完再点一次麦克风结束', true);
+      return true;
+    }
+
+    async function startRecording() {
+      if (alwaysOnActive) {
+        setStatus('常驻模式运行中，请先关闭常驻模式', false);
+        return;
+      }
+      const ok = await openMicGraph('manual');
+      if (ok) {
+        setStatus('录音中…说完再点一次麦克风结束', true);
+      }
+    }
+
+    async function transcribePcm16k(pcm16k) {
+      const wav = encodeWav(pcm16k, 16000);
+      const res = await fetch('/api/stt', {
+        method: 'POST',
+        headers: { 'Content-Type': 'audio/wav' },
+        body: wav,
+      });
+      const data = await res.json();
+      if (res.ok && data.ok && data.text) {
+        return { ok: true, text: data.text, message: data.message || '' };
+      }
+      return { ok: false, text: '', message: (data && data.message) || '识别失败' };
     }
 
     async function stopRecordingAndTranscribe() {
       setListeningUi(false);
-      setStatus('正在识别…首次使用会下载语音模型（约150MB），请稍候', true);
+      setStatus('正在识别…', true);
 
       const chunks = recordChunks.slice();
       const sampleRate = recordSampleRate;
       cleanupAudioGraph();
+      captureMode = 'manual';
 
       if (!chunks.length) {
         setStatus('没有录到声音，请再试一次', false);
@@ -1994,37 +2893,75 @@
         return;
       }
 
-      const wav = encodeWav(pcm16k, 16000);
-
       try {
-        const res = await fetch('/api/stt', {
-          method: 'POST',
-          headers: { 'Content-Type': 'audio/wav' },
-          body: wav,
-        });
-        const data = await res.json();
-        if (res.ok && data.ok && data.text) {
-          const prefix = input.value;
-          input.value = prefix + data.text;
-          syncComposerState();
-          input.style.height = 'auto';
-          input.style.height = Math.min(input.scrollHeight, 200) + 'px';
-          if (uiSettings.streamMode && !isComposing) {
-            scheduleStreamSync();
-          }
+        const result = await transcribePcm16k(pcm16k);
+        if (result.ok && result.text) {
+          applyCapturedSpeech((input.value || '') + result.text);
           setStatus('识别完成，可编辑后发送', true);
-          activateInput();
         } else {
-          setStatus((data && data.message) || '识别失败', false);
+          setStatus(result.message || '识别失败', false);
         }
       } catch {
         setStatus('识别请求失败，请确认手机和电脑在同一 WiFi', false);
       }
     }
 
+    function stopAlwaysOnListening(updateSetting) {
+      alwaysOnActive = false;
+      alwaysOnBusy = false;
+      if (captureMode === 'always-on') {
+        setListeningUi(false);
+        cleanupAudioGraph();
+        captureMode = 'manual';
+      } else {
+        resetVad();
+      }
+      if (updateSetting && uiSettings.voiceAlwaysOn) {
+        uiSettings.voiceAlwaysOn = false;
+        saveSettings(uiSettings);
+        applyUiSettings();
+      }
+    }
+
+    async function startAlwaysOnListening() {
+      if (alwaysOnActive) {
+        setStatus('常驻待命中…说「' + (uiSettings.voiceKeyword || '你好') + '」+内容后停顿', true);
+        return true;
+      }
+      if (isListening && captureMode === 'manual') {
+        setListeningUi(false);
+        cleanupAudioGraph();
+      }
+
+      try {
+        const ok = await openMicGraph('always-on');
+        if (!ok) {
+          return false;
+        }
+        alwaysOnActive = true;
+        alwaysOnCooldownUntil = 0;
+        setStatus('常驻待命中…说「' + (uiSettings.voiceKeyword || '你好') + '」+内容后停顿', true);
+        return true;
+      } catch (err) {
+        stopAlwaysOnListening(false);
+        const name = err && err.name ? err.name : '';
+        if (name === 'NotAllowedError' || name === 'PermissionDeniedError') {
+          setStatus('麦克风权限被拒绝，请在浏览器设置中允许', false);
+        } else {
+          setStatus('无法开启常驻监听：' + ((err && err.message) || name || '未知错误'), false);
+        }
+        return false;
+      }
+    }
+
     async function toggleSpeechRecognition() {
       if (!uiSettings.voiceEnabled) {
-        setStatus('请先在设置中开启语音输入', false);
+        setStatus('请先在设置 → 语音设置中开启语音输入', false);
+        return;
+      }
+      if (alwaysOnActive || uiSettings.voiceAlwaysOn) {
+        stopAlwaysOnListening(true);
+        setStatus('常驻模式已关闭', true);
         return;
       }
       if (isListening) {
@@ -2068,6 +3005,10 @@
       toggleSpeechRecognition();
     });
 
+    if (uiSettings.voiceEnabled && uiSettings.voiceAlwaysOn) {
+      startAlwaysOnListening();
+    }
+
     syncComposerState();
 
     const gyroPad = document.getElementById('gyroPad');
@@ -2078,7 +3019,8 @@
     const gyroClickBtn = document.getElementById('gyroClickBtn');
 
     const TOUCH_PAD_SETTINGS_KEY = 'phone-input-sync.touchpad';
-    const defaultTouchPadSettings = { sensitivity: 1.8 };
+    const defaultTouchPadSettings = { sensitivity: 1.8, scrollSensitivity: 1.2 };
+    const SCROLL_PIXELS_PER_TICK = 28;
 
     function loadTouchPadSettings() {
       try {
@@ -2090,6 +3032,7 @@
         const parsed = JSON.parse(raw);
         return {
           sensitivity: Number(parsed.sensitivity) || defaultTouchPadSettings.sensitivity,
+          scrollSensitivity: Number(parsed.scrollSensitivity) || defaultTouchPadSettings.scrollSensitivity,
         };
       } catch {
         return { ...defaultTouchPadSettings };
@@ -2102,11 +3045,16 @@
       active: false,
       dragging: false,
       moved: false,
-      lastPointerX: 0,
-      lastPointerY: 0,
+      scrolling: false,
+      pointers: new Map(),
+      lastCentroidX: 0,
+      lastCentroidY: 0,
       pendingDx: 0,
       pendingDy: 0,
-      sending: false,
+      pendingScrollX: 0,
+      pendingScrollY: 0,
+      sendingMove: false,
+      sendingScroll: false,
       loopId: 0,
     };
 
@@ -2148,13 +3096,13 @@
         return;
       }
 
-      if (touchPadState.sending) {
+      if (touchPadState.sendingMove) {
         touchPadState.pendingDx += dx;
         touchPadState.pendingDy += dy;
         return;
       }
 
-      touchPadState.sending = true;
+      touchPadState.sendingMove = true;
       try {
         await fetch('/api/mouse/move', {
           method: 'POST',
@@ -2165,7 +3113,38 @@
       } catch {
         setGyroStatus('网络断开，鼠标控制暂停', 'error');
       } finally {
-        touchPadState.sending = false;
+        touchPadState.sendingMove = false;
+      }
+    }
+
+    async function flushMouseScroll() {
+      const dx = Math.trunc(touchPadState.pendingScrollX / SCROLL_PIXELS_PER_TICK);
+      const dy = Math.trunc(touchPadState.pendingScrollY / SCROLL_PIXELS_PER_TICK);
+      touchPadState.pendingScrollX -= dx * SCROLL_PIXELS_PER_TICK;
+      touchPadState.pendingScrollY -= dy * SCROLL_PIXELS_PER_TICK;
+
+      if (dx === 0 && dy === 0) {
+        return;
+      }
+
+      if (touchPadState.sendingScroll) {
+        touchPadState.pendingScrollX += dx * SCROLL_PIXELS_PER_TICK;
+        touchPadState.pendingScrollY += dy * SCROLL_PIXELS_PER_TICK;
+        return;
+      }
+
+      touchPadState.sendingScroll = true;
+      try {
+        await fetch('/api/mouse/scroll', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ dx, dy }),
+          keepalive: true,
+        });
+      } catch {
+        setGyroStatus('网络断开，滚轮控制暂停', 'error');
+      } finally {
+        touchPadState.sendingScroll = false;
       }
     }
 
@@ -2193,6 +3172,7 @@
         return;
       }
       flushMouseMove();
+      flushMouseScroll();
       touchPadState.loopId = window.requestAnimationFrame(onTouchPadFrame);
     }
 
@@ -2211,7 +3191,52 @@
       touchPadState.loopId = 0;
       touchPadState.pendingDx = 0;
       touchPadState.pendingDy = 0;
+      touchPadState.pendingScrollX = 0;
+      touchPadState.pendingScrollY = 0;
+      touchPadState.pointers.clear();
       resetDot();
+    }
+
+    function syncPadVisual() {
+      const count = touchPadState.pointers.size;
+      if (count === 0) {
+        gyroPad.classList.remove('is-dragging');
+        resetDot();
+        return;
+      }
+
+      gyroPad.classList.add('is-dragging');
+      let sumX = 0;
+      let sumY = 0;
+      for (const point of touchPadState.pointers.values()) {
+        sumX += point.x;
+        sumY += point.y;
+      }
+      const { centerX, centerY } = getPadMetrics();
+      setDotOffset(sumX / count - centerX, sumY / count - centerY);
+    }
+
+    function getPointersCentroid() {
+      const count = touchPadState.pointers.size;
+      if (count === 0) {
+        return null;
+      }
+      let sumX = 0;
+      let sumY = 0;
+      for (const point of touchPadState.pointers.values()) {
+        sumX += point.x;
+        sumY += point.y;
+      }
+      return { x: sumX / count, y: sumY / count };
+    }
+
+    function rememberCentroid() {
+      const centroid = getPointersCentroid();
+      if (!centroid) {
+        return;
+      }
+      touchPadState.lastCentroidX = centroid.x;
+      touchPadState.lastCentroidY = centroid.y;
     }
 
     function enableTouchPad() {
@@ -2219,8 +3244,8 @@
       gyroPad.classList.add('is-active');
       gyroToggleBtn.textContent = '停用';
       gyroToggleBtn.classList.add('is-on');
-      setGyroStatus('拖动圆点控制鼠标', 'active');
-      gyroHint.textContent = '按住并拖动圆点，往哪滑光标就往哪走';
+      setGyroStatus('单指移动，双指滚动', 'active');
+      gyroHint.textContent = '单指拖动移动光标，双指上下滑动相当于滚轮';
       startTouchPadLoop();
     }
 
@@ -2228,12 +3253,13 @@
       touchPadState.active = false;
       touchPadState.dragging = false;
       touchPadState.moved = false;
+      touchPadState.scrolling = false;
       gyroPad.classList.remove('is-active', 'is-dragging');
       gyroToggleBtn.textContent = '启用';
       gyroToggleBtn.classList.remove('is-on');
       stopTouchPadLoop();
       setGyroStatus('已停用', '');
-      gyroHint.textContent = '拖动圆点移动光标，轻触圆点左键单击';
+      gyroHint.textContent = '单指拖动移动光标，双指上下滑动滚动，轻触左键单击';
     }
 
     gyroToggleBtn.addEventListener('click', () => {
@@ -2253,52 +3279,102 @@
         return;
       }
       event.preventDefault();
-      gyroPad.classList.add('is-dragging');
-      gyroPad.setPointerCapture(event.pointerId);
-      touchPadState.dragging = true;
-      touchPadState.moved = false;
-      touchPadState.lastPointerX = event.clientX;
-      touchPadState.lastPointerY = event.clientY;
+      try {
+        gyroPad.setPointerCapture(event.pointerId);
+      } catch {
+        // ignore capture failures on some browsers
+      }
 
-      const { centerX, centerY } = getPadMetrics();
-      setDotOffset(event.clientX - centerX, event.clientY - centerY);
+      const isFirst = touchPadState.pointers.size === 0;
+      touchPadState.pointers.set(event.pointerId, {
+        x: event.clientX,
+        y: event.clientY,
+      });
+      touchPadState.dragging = true;
+
+      if (isFirst) {
+        touchPadState.moved = false;
+        touchPadState.scrolling = false;
+      }
+
+      if (touchPadState.pointers.size >= 2) {
+        touchPadState.scrolling = true;
+        touchPadState.moved = true;
+        touchPadState.pendingDx = 0;
+        touchPadState.pendingDy = 0;
+      }
+
+      rememberCentroid();
+      syncPadVisual();
     });
 
     gyroPad.addEventListener('pointermove', (event) => {
-      if (!touchPadState.active || !touchPadState.dragging) {
+      if (!touchPadState.active || !touchPadState.pointers.has(event.pointerId)) {
         return;
       }
 
-      const dx = (event.clientX - touchPadState.lastPointerX) * touchPadSettings.sensitivity;
-      const dy = (event.clientY - touchPadState.lastPointerY) * touchPadSettings.sensitivity;
-      touchPadState.lastPointerX = event.clientX;
-      touchPadState.lastPointerY = event.clientY;
+      const prev = touchPadState.pointers.get(event.pointerId);
+      const dx = event.clientX - prev.x;
+      const dy = event.clientY - prev.y;
+      prev.x = event.clientX;
+      prev.y = event.clientY;
 
-      if (Math.abs(dx) >= 0.5 || Math.abs(dy) >= 0.5) {
+      if (touchPadState.pointers.size >= 2) {
+        touchPadState.scrolling = true;
         touchPadState.moved = true;
-        touchPadState.pendingDx += dx;
-        touchPadState.pendingDy += dy;
+        const centroid = getPointersCentroid();
+        if (centroid) {
+          const scrollDx = (centroid.x - touchPadState.lastCentroidX) * touchPadSettings.scrollSensitivity;
+          const scrollDy = (centroid.y - touchPadState.lastCentroidY) * touchPadSettings.scrollSensitivity;
+          touchPadState.lastCentroidX = centroid.x;
+          touchPadState.lastCentroidY = centroid.y;
+          // 手指上滑 → scrollDy 为负 → enigo 向上滚（等同滚轮上滑）
+          if (Math.abs(scrollDx) >= 0.3 || Math.abs(scrollDy) >= 0.3) {
+            touchPadState.pendingScrollX += scrollDx;
+            touchPadState.pendingScrollY += scrollDy;
+          }
+        }
+      } else if (!touchPadState.scrolling) {
+        const moveDx = dx * touchPadSettings.sensitivity;
+        const moveDy = dy * touchPadSettings.sensitivity;
+        if (Math.abs(moveDx) >= 0.5 || Math.abs(moveDy) >= 0.5) {
+          touchPadState.moved = true;
+          touchPadState.pendingDx += moveDx;
+          touchPadState.pendingDy += moveDy;
+        }
+        rememberCentroid();
       }
 
-      const { centerX, centerY } = getPadMetrics();
-      setDotOffset(event.clientX - centerX, event.clientY - centerY);
+      syncPadVisual();
     });
 
-    function finishPointerDrag() {
-      if (!touchPadState.dragging) {
+    function finishPointer(event) {
+      if (!touchPadState.pointers.has(event.pointerId)) {
         return;
       }
-      touchPadState.dragging = false;
-      gyroPad.classList.remove('is-dragging');
-      resetDot();
 
-      if (touchPadState.active && !touchPadState.moved) {
+      touchPadState.pointers.delete(event.pointerId);
+
+      if (touchPadState.pointers.size > 0) {
+        rememberCentroid();
+        syncPadVisual();
+        return;
+      }
+
+      const shouldClick = touchPadState.active
+        && !touchPadState.moved
+        && !touchPadState.scrolling;
+      touchPadState.dragging = false;
+      touchPadState.scrolling = false;
+      syncPadVisual();
+
+      if (shouldClick) {
         sendMouseClick('left');
       }
     }
 
-    gyroPad.addEventListener('pointerup', finishPointerDrag);
-    gyroPad.addEventListener('pointercancel', finishPointerDrag);
+    gyroPad.addEventListener('pointerup', finishPointer);
+    gyroPad.addEventListener('pointercancel', finishPointer);
   </script>
 </body>
 </html>
