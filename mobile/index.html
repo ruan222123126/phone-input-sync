@@ -1292,6 +1292,36 @@
         <input id="voiceKeywordInput" type="text" placeholder="唤醒关键词，例如：你好" autocomplete="off">
       </div>
       <p class="shortcut-form-hint">常驻模式平时几乎不占电脑性能：只有你开口说话并停顿后才会识别一次。未听到关键词时不保留内容；听到关键词后，只把后面的话填入输入框。例如关键词「你好」，说「你好，帮我整理项目」后稍停，会得到「帮我整理项目」。</p>
+
+      <div class="settings-option" style="margin-top: 8px; border-top: 1px solid #f3f4f6;">
+        <span class="settings-option-label">重复文字清洗</span>
+        <button
+          id="toggleRepeatClean"
+          class="settings-switch"
+          type="button"
+          role="switch"
+          aria-checked="false"
+          aria-label="重复文字清洗"
+        ></button>
+      </div>
+
+      <div class="settings-option">
+        <span class="settings-option-label">
+          停笔 <input
+            id="repeatPauseSecondsInput"
+            class="settings-inline-input settings-inline-input-seconds"
+            type="text"
+            inputmode="numeric"
+            pattern="[0-9]*"
+            value="2"
+            maxlength="3"
+            autocomplete="off"
+            aria-label="重复文字清洗停笔秒数"
+          > 秒后清洗
+        </span>
+      </div>
+
+      <p id="repeatCleanHint" class="shortcut-form-hint">开启后，电脑会持续读取「当前焦点输入框」的文字；停笔数秒后，如果发现「语语音语音输语音输入……」这种逐字累积的重复，就自动替换成最后那一整段。只对支持 Windows 无障碍的普通输入框有效（记事本、多数聊天/浏览器输入框）；密码框不会读取。默认关闭。</p>
     </div>
   </div>
 
@@ -1345,6 +1375,9 @@
     const toggleVoice = document.getElementById('toggleVoice');
     const toggleAlwaysOn = document.getElementById('toggleAlwaysOn');
     const voiceKeywordInput = document.getElementById('voiceKeywordInput');
+    const toggleRepeatClean = document.getElementById('toggleRepeatClean');
+    const repeatPauseSecondsInput = document.getElementById('repeatPauseSecondsInput');
+    const repeatCleanHint = document.getElementById('repeatCleanHint');
     const sendIcon = document.getElementById('sendIcon');
     const openGeneralBtn = document.getElementById('openGeneralBtn');
     const generalModal = document.getElementById('generalModal');
@@ -1389,9 +1422,12 @@
       voiceEnabled: false,
       voiceAlwaysOn: false,
       voiceKeyword: '你好',
+      repeatCleanEnabled: false,
+      repeatCleanPauseSeconds: 2,
     };
     const DEFAULT_SUBMIT_KEYWORD = '提交';
     const DEFAULT_PAUSE_AUTO_SEND_SECONDS = 3;
+    const DEFAULT_REPEAT_CLEAN_PAUSE_SECONDS = 2;
     const SUBMIT_AUTO_SEND_MS = 3000;
 
     const SEND_ICON_PATHS = '<path d="m5 12 7-7 7 7"></path><path d="M12 19V5"></path>';
@@ -1530,10 +1566,21 @@
           voiceKeyword: typeof parsed.voiceKeyword === 'string' && parsed.voiceKeyword.trim()
             ? parsed.voiceKeyword.trim()
             : '你好',
+          repeatCleanEnabled: parsed.repeatCleanEnabled === true,
+          repeatCleanPauseSeconds: normalizeRepeatCleanSeconds(parsed.repeatCleanPauseSeconds),
         };
       } catch {
         return { ...defaultSettings };
       }
+    }
+
+    function normalizeRepeatCleanSeconds(raw) {
+      const digits = String(raw ?? '').replace(/\D/g, '');
+      const parsed = parseInt(digits, 10);
+      if (!Number.isInteger(parsed) || parsed <= 0) {
+        return DEFAULT_REPEAT_CLEAN_PAUSE_SECONDS;
+      }
+      return Math.min(parsed, 30);
     }
 
     function saveSettings(settings) {
@@ -1693,6 +1740,7 @@
       syncSwitch(toggleStream, uiSettings.streamMode);
       syncSwitch(toggleVoice, uiSettings.voiceEnabled);
       syncSwitch(toggleAlwaysOn, uiSettings.voiceAlwaysOn);
+      syncSwitch(toggleRepeatClean, uiSettings.repeatCleanEnabled);
       if (document.activeElement !== submitKeywordInput) {
         submitKeywordInput.value = getSubmitKeyword();
       }
@@ -1701,6 +1749,9 @@
       }
       if (document.activeElement !== voiceKeywordInput) {
         voiceKeywordInput.value = uiSettings.voiceKeyword || '';
+      }
+      if (document.activeElement !== repeatPauseSecondsInput) {
+        repeatPauseSecondsInput.value = String(getRepeatCleanPauseSeconds());
       }
       toggleAutoSendSubmit.setAttribute(
         'aria-label',
@@ -2195,6 +2246,128 @@
     voiceKeywordInput.addEventListener('change', saveVoiceKeywordFromInput);
     voiceKeywordInput.addEventListener('blur', saveVoiceKeywordFromInput);
 
+    // —— 重复文字清洗：由电脑端持续监视焦点输入框 ——
+    function getRepeatCleanPauseSeconds() {
+      const seconds = Number(uiSettings.repeatCleanPauseSeconds);
+      if (Number.isInteger(seconds) && seconds > 0) {
+        return seconds;
+      }
+      return DEFAULT_REPEAT_CLEAN_PAUSE_SECONDS;
+    }
+
+    async function pushRepeatCleanSetting() {
+      const res = await fetch('/api/repeat-watch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          enabled: uiSettings.repeatCleanEnabled,
+          pause_ms: getRepeatCleanPauseSeconds() * 1000,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        throw new Error((data && data.message) || '设置失败');
+      }
+      return data;
+    }
+
+    function repeatCleanStatusText(data) {
+      if (!data.enabled) {
+        return '重复文字清洗已关闭';
+      }
+      if (!data.supported) {
+        return '重复文字清洗仅支持 Windows 电脑';
+      }
+      if (!data.focused_readable) {
+        return '已开启，但当前焦点输入框读不到文字（可能不支持无障碍）';
+      }
+      const label = data.focused_label ? '（' + data.focused_label + '）' : '';
+      if (!data.focused_writable) {
+        return '已开启，当前输入框只能读不能改' + label;
+      }
+      return '已开启，正在监视当前焦点输入框' + label;
+    }
+
+    toggleRepeatClean.addEventListener('click', async () => {
+      const turningOn = !uiSettings.repeatCleanEnabled;
+      uiSettings.repeatCleanEnabled = turningOn;
+      saveSettings(uiSettings);
+      applyUiSettings();
+      if (!turningOn) {
+        setStatus('正在关闭重复文字清洗…', true);
+        try {
+          const data = await pushRepeatCleanSetting();
+          setStatus(repeatCleanStatusText(data), true);
+        } catch {
+          setStatus('网络错误，请确认手机和电脑在同一 WiFi', false);
+        }
+        return;
+      }
+
+      setStatus('正在开启重复文字清洗…', true);
+      try {
+        const data = await pushRepeatCleanSetting();
+        const ok = data.supported && data.focused_readable;
+        setStatus(repeatCleanStatusText(data), ok);
+      } catch {
+        uiSettings.repeatCleanEnabled = false;
+        saveSettings(uiSettings);
+        applyUiSettings();
+        setStatus('网络错误，请确认手机和电脑在同一 WiFi', false);
+      }
+    });
+
+    function saveRepeatCleanPauseFromInput() {
+      const seconds = normalizeRepeatCleanSeconds(repeatPauseSecondsInput.value);
+      repeatPauseSecondsInput.value = String(seconds);
+      if (uiSettings.repeatCleanPauseSeconds === seconds) {
+        return;
+      }
+      uiSettings.repeatCleanPauseSeconds = seconds;
+      saveSettings(uiSettings);
+      if (uiSettings.repeatCleanEnabled) {
+        pushRepeatCleanSetting()
+          .then((data) => setStatus(repeatCleanStatusText(data), true))
+          .catch(() => setStatus('网络错误，未能更新清洗间隔', false));
+      }
+    }
+
+    repeatPauseSecondsInput.addEventListener('input', () => {
+      const digits = repeatPauseSecondsInput.value.replace(/\D/g, '').slice(0, 2);
+      if (repeatPauseSecondsInput.value !== digits) {
+        repeatPauseSecondsInput.value = digits;
+      }
+    });
+    repeatPauseSecondsInput.addEventListener('change', saveRepeatCleanPauseFromInput);
+    repeatPauseSecondsInput.addEventListener('blur', saveRepeatCleanPauseFromInput);
+    repeatPauseSecondsInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        repeatPauseSecondsInput.blur();
+      }
+    });
+    repeatPauseSecondsInput.addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
+
+    async function syncRepeatCleanOnLoad() {
+      if (!uiSettings.repeatCleanEnabled) {
+        return;
+      }
+      try {
+        const res = await fetch('/api/repeat-watch');
+        const data = await res.json();
+        if (!res.ok || !data.ok) {
+          return;
+        }
+        // 电脑端可能已重启，这里以本地设置为准重新推送一次
+        const pushed = await pushRepeatCleanSetting();
+        setStatus(repeatCleanStatusText(pushed), true);
+      } catch {
+        // 忽略加载时的网络错误
+      }
+    }
+
     toggleAlwaysOn.addEventListener('click', async () => {
       if (uiSettings.voiceAlwaysOn) {
         stopAlwaysOnListening(false);
@@ -2236,6 +2409,7 @@
     renderShortcutBar();
     renderLockBar();
     refreshLockStatus(false);
+    syncRepeatCleanOnLoad();
 
     lockBtn.addEventListener('click', lockTargetWindow);
     unlockBtn.addEventListener('click', unlockTargetWindow);

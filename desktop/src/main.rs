@@ -25,7 +25,13 @@ use tower_http::cors::{Any, CorsLayer};
 use tracing::{error, info};
 use tracing_subscriber::fmt::time::ChronoLocal;
 
-const MOBILE_INDEX: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../mobile/index.html"));
+mod repeat_watch;
+mod repetition;
+
+use repeat_watch::{RepeatWatchConfig, SharedRepeatWatch};
+
+const MOBILE_INDEX: &str =
+    include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../mobile/index.html"));
 
 const PORT: u16 = 8765;
 const HTTPS_PORT: u16 = 8766;
@@ -41,6 +47,7 @@ struct AppState {
     last_text: Arc<Mutex<String>>,
     enigo: Arc<Mutex<Enigo>>,
     locked_window: Arc<Mutex<Option<LockedWindow>>>,
+    repeat_watch: SharedRepeatWatch,
 }
 
 #[derive(Deserialize)]
@@ -106,6 +113,26 @@ struct LockResponse {
     ok: bool,
     locked: bool,
     title: String,
+    message: String,
+}
+
+#[derive(Deserialize)]
+struct RepeatWatchRequest {
+    #[serde(default)]
+    enabled: Option<bool>,
+    #[serde(default)]
+    pause_ms: Option<u64>,
+}
+
+#[derive(Serialize)]
+struct RepeatWatchResponse {
+    ok: bool,
+    enabled: bool,
+    pause_ms: u64,
+    supported: bool,
+    focused_readable: bool,
+    focused_writable: bool,
+    focused_label: String,
     message: String,
 }
 
@@ -241,7 +268,11 @@ fn locked_window_message(state: &AppState) -> String {
         .locked_window
         .lock()
         .ok()
-        .and_then(|guard| guard.as_ref().map(|win| format!("已发送到锁定窗口「{}」", win.title)))
+        .and_then(|guard| {
+            guard
+                .as_ref()
+                .map(|win| format!("已发送到锁定窗口「{}」", win.title))
+        })
         .unwrap_or_else(|| "已发送到电脑当前输入框".into())
 }
 
@@ -418,22 +449,10 @@ fn ensure_firewall_rules(exe_path: &std::path::Path) -> Result<(), String> {
     let http_port = format!("localport={PORT}");
     let https_port = format!("localport={HTTPS_PORT}");
 
-    let _ = run_netsh(&[
-        "advfirewall",
-        "firewall",
-        "delete",
-        "rule",
-        &program_arg,
-    ]);
+    let _ = run_netsh(&["advfirewall", "firewall", "delete", "rule", &program_arg]);
     for name in [APP_RULE, HTTP_RULE, HTTPS_RULE] {
         let name_arg = format!("name={name}");
-        let _ = run_netsh(&[
-            "advfirewall",
-            "firewall",
-            "delete",
-            "rule",
-            &name_arg,
-        ]);
+        let _ = run_netsh(&["advfirewall", "firewall", "delete", "rule", &name_arg]);
     }
 
     let app_name = format!("name={APP_RULE}");
@@ -495,10 +514,7 @@ fn ensure_tls_cert(lan_ips: &[Ipv4Addr]) -> Result<(PathBuf, PathBuf), String> {
 
     // 同目录已有证书则直接复用，避免反复重建导致手机要重新信任
     if cert_path.is_file() && key_path.is_file() {
-        info!(
-            "已使用程序目录下已有的 HTTPS 证书: {}",
-            cert_path.display()
-        );
+        info!("已使用程序目录下已有的 HTTPS 证书: {}", cert_path.display());
         return Ok((cert_path, key_path));
     }
 
@@ -555,6 +571,8 @@ fn build_app(state: AppState) -> Router {
         .route("/api/lock", post(lock_handler))
         .route("/api/unlock", post(unlock_handler))
         .route("/api/lock/status", get(lock_status_handler))
+        .route("/api/repeat-watch", get(repeat_watch_get_handler))
+        .route("/api/repeat-watch", post(repeat_watch_set_handler))
         .route("/api/status", get(status_handler))
         .route("/api/health", get(health_handler))
         .route("/", get(mobile_index_handler))
@@ -1003,10 +1021,7 @@ async fn sync_handler(
             }
             let message = locked_window_message(&state);
             info!("已同步 {} 个字符", char_count);
-            (
-                StatusCode::OK,
-                Json(SyncResponse { ok: true, message }),
-            )
+            (StatusCode::OK, Json(SyncResponse { ok: true, message }))
         }
         Err(message) => {
             error!("{message}");
@@ -1022,7 +1037,10 @@ async fn lock_handler(State(state): State<AppState>) -> impl IntoResponse {
     match win_focus::capture_foreground_window() {
         Some((hwnd, title)) => {
             if let Ok(mut locked) = state.locked_window.lock() {
-                *locked = Some(LockedWindow { hwnd, title: title.clone() });
+                *locked = Some(LockedWindow {
+                    hwnd,
+                    title: title.clone(),
+                });
             }
             info!("已锁定窗口: {title}");
             (
@@ -1089,6 +1107,103 @@ async fn lock_status_handler(State(state): State<AppState>) -> impl IntoResponse
     })
 }
 
+fn repeat_watch_response(
+    state: &AppState,
+    focused: (bool, bool, String),
+    message: String,
+) -> RepeatWatchResponse {
+    let (enabled, pause_ms) = state
+        .repeat_watch
+        .lock()
+        .map(|guard| (guard.enabled, guard.pause_ms))
+        .unwrap_or((false, 2000));
+
+    let (focused_readable, focused_writable, focused_label) = focused;
+
+    RepeatWatchResponse {
+        ok: true,
+        enabled,
+        pause_ms,
+        supported: cfg!(windows),
+        focused_readable,
+        focused_writable,
+        focused_label,
+        message,
+    }
+}
+
+/// 在阻塞线程池里探测焦点输入框，避免在 async 工作线程上初始化 COM。
+async fn probe_focused(enabled: bool) -> (bool, bool, String) {
+    if !enabled {
+        return (false, false, String::new());
+    }
+    tokio::task::spawn_blocking(repeat_watch::probe_focused_input)
+        .await
+        .unwrap_or_else(|_| (false, false, "探测失败".into()))
+}
+
+async fn repeat_watch_get_handler(State(state): State<AppState>) -> impl IntoResponse {
+    let (enabled, message) = state
+        .repeat_watch
+        .lock()
+        .map(|guard| {
+            if guard.enabled {
+                (
+                    true,
+                    format!(
+                        "正在监视，停笔 {} 秒后自动清洗重复文字",
+                        guard.pause_ms / 1000
+                    ),
+                )
+            } else {
+                (false, "未开启重复文字清洗".to_string())
+            }
+        })
+        .unwrap_or((false, "状态不可用".to_string()));
+
+    let focused = probe_focused(enabled).await;
+    Json(repeat_watch_response(&state, focused, message))
+}
+
+async fn repeat_watch_set_handler(
+    State(state): State<AppState>,
+    Json(body): Json<RepeatWatchRequest>,
+) -> impl IntoResponse {
+    let (enabled, pause_ms) = {
+        let mut guard = match state.repeat_watch.lock() {
+            Ok(guard) => guard,
+            Err(_) => {
+                return Json(repeat_watch_response(
+                    &state,
+                    (false, false, String::new()),
+                    "状态不可用".into(),
+                ))
+            }
+        };
+        if let Some(value) = body.enabled {
+            guard.enabled = value;
+        }
+        if let Some(value) = body.pause_ms {
+            guard.pause_ms = value.clamp(500, 30_000);
+        }
+        (guard.enabled, guard.pause_ms)
+    };
+
+    info!(
+        "重复文字清洗：{}（停笔 {}ms）",
+        if enabled { "已开启" } else { "已关闭" },
+        pause_ms
+    );
+
+    let message = if enabled {
+        "已开始监视电脑当前焦点输入框".to_string()
+    } else {
+        "已关闭重复文字清洗".to_string()
+    };
+    let focused = probe_focused(enabled).await;
+    Json(repeat_watch_response(&state, focused, message))
+}
+
 const WHISPER_BIN_URLS: &[&str] = &[
     "https://github.com/ggml-org/whisper.cpp/releases/download/b4938/whisper-bin-x64.zip",
     "https://ghfast.top/https://github.com/ggml-org/whisper.cpp/releases/download/b4938/whisper-bin-x64.zip",
@@ -1117,7 +1232,13 @@ fn download_file(urls: &[&str], dest: &Path, label: &str) -> Result<(), String> 
         );
 
         let output = Command::new("powershell")
-            .args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", &script])
+            .args([
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-Command",
+                &script,
+            ])
             .output()
             .map_err(|e| format!("启动下载失败: {e}"))?;
 
@@ -1243,7 +1364,9 @@ fn whisper_search_dirs() -> Vec<PathBuf> {
 fn whisper_runtime_status() -> (bool, String) {
     let search_dirs = whisper_search_dirs();
     let has_model = find_whisper_model(&search_dirs).is_some();
-    let has_exe = search_dirs.iter().any(|dir| find_whisper_exe(dir).is_some());
+    let has_exe = search_dirs
+        .iter()
+        .any(|dir| find_whisper_exe(dir).is_some());
     match (has_exe, has_model) {
         (true, true) => (true, "语音模型已就绪".into()),
         (false, true) => (false, "已有模型，但缺少语音引擎".into()),
@@ -1346,19 +1469,8 @@ fn transcribe_wav_with_whisper(wav_bytes: &[u8]) -> Result<String, String> {
     let output = Command::new(&exe)
         .current_dir(whisper_dir())
         .args([
-            "-m",
-            &model_arg,
-            "-f",
-            &wav_arg,
-            "-l",
-            "zh",
-            "--prompt",
-            prompt_arg,
-            "-nt",
-            "-np",
-            "-otxt",
-            "-of",
-            &out_arg,
+            "-m", &model_arg, "-f", &wav_arg, "-l", "zh", "--prompt", prompt_arg, "-nt", "-np",
+            "-otxt", "-of", &out_arg,
         ])
         .output()
         .map_err(|e| format!("启动 Whisper 失败: {e}"))?;
@@ -1533,7 +1645,10 @@ async fn main() {
         last_text: Arc::new(Mutex::new(String::new())),
         enigo: Arc::new(Mutex::new(enigo)),
         locked_window: Arc::new(Mutex::new(None)),
+        repeat_watch: Arc::new(Mutex::new(RepeatWatchConfig::default())),
     };
+
+    repeat_watch::spawn_watcher(state.repeat_watch.clone());
 
     let http_app = build_app(state.clone());
     let https_app = build_app(state);
