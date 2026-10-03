@@ -7,6 +7,9 @@ Thumbs.db
 *.pdb
 desktop/certs/
 .codegraph/
-dist/
+dist/*
+!dist/enable-autostart.cmd
+!dist/disable-autostart.cmd
+!dist/usage.txt
 desktop/stt-stderr.txt
 desktop/stt-stdout.txt
